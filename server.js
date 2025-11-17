@@ -4,6 +4,12 @@
  * - JWT auth (SECRET env)
  * - Endpoints: auth, teacher create student, save project, submit, get project list
  */
+const path = require("path");
+app.use(express.static(path.join(__dirname, "frontend")));
+app.get("/", (req, res) => {
+  res.sendFile(path.join(__dirname, "frontend", "index.html"));
+});
+
 const express = require('express');
 const http = require('http');
 const mongoose = require('mongoose');
@@ -22,11 +28,7 @@ app.use(cors());
 app.use(bodyParser.json({ limit: '5mb' }));
 app.use(express.static(__dirname + '/frontend'));
 
-const path = require("path");
-app.use(express.static(path.join(__dirname, "frontend")));
-app.get("/", (req, res) => {
-  res.sendFile(path.join(__dirname, "frontend", "index.html"));
-});
+
 
 
 
