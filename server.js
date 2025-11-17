@@ -1,9 +1,3 @@
-const path = require("path");
-app.use(express.static(path.join(__dirname, "frontend")));
-
-
-
-
 /**
  * Miranda-like Option B - Node.js backend
  * - Uses MongoDB (MONGODB_URI env)
@@ -27,6 +21,14 @@ const io = socketio(server, { cors: { origin: "*" } });
 app.use(cors());
 app.use(bodyParser.json({ limit: '5mb' }));
 app.use(express.static(__dirname + '/frontend'));
+
+const path = require("path");
+app.use(express.static(path.join(__dirname, "frontend")));
+app.get("/", (req, res) => {
+  res.sendFile(path.join(__dirname, "frontend", "index.html"));
+});
+
+
 
 // DB connect
 const MONGO = process.env.MONGODB_URI || 'mongodb://localhost:27017/miranda_optb';
