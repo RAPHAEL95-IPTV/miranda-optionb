@@ -1,0 +1,1 @@
+// rover robot definition placeholder
