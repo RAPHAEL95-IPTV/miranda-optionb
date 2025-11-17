@@ -1,0 +1,69 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><title>Editor</title>
+<link rel="stylesheet" href="/css/style.css"></head><body>
+<div class="container">
+  <h2>Éditeur Blockly</h2>
+  <div>
+    <label>Nom projet: <input id="project_name" value="Mon Projet"/></label>
+    <button id="save_btn">Sauvegarder</button>
+    <button id="submit_btn">Soumettre</button>
+    <button id="run_btn">Lancer</button>
+  </div>
+  <div id="blocklyDiv"></div>
+  <iframe id="simframe" src="/frontend/sim.html" style="width:38%; height:520px; float:right;"></iframe>
+</div>
+
+<script src="https://unpkg.com/blockly/blockly.min.js"></script>
+<script>
+  const workspace = Blockly.inject('blocklyDiv', {
+    toolbox: `<xml>
+      <block type="controls_if"></block>
+      <block type="controls_repeat_ext"></block>
+      <block type="math_number"></block>
+      <block type="text"></block>
+      <block type="variables_set"></block>
+      <block type="variables_get"></block>
+    </xml>`
+  });
+
+  Blockly.defineBlocksWithJsonArray([{
+    "type":"robot_move",
+    "message0":"move forward %1",
+    "args0":[{"type":"field_number","name":"DIST","value":1}],
+    "previousStatement":null,
+    "nextStatement":null,
+    "colour":160
+  }]);
+
+  Blockly.JavaScript['robot_move'] = function(block){
+    var dist = block.getFieldValue('DIST');
+    return `robot_api.move(${dist});\n`;
+  };
+
+  function authHeaders(){ return { 'Authorization':'Bearer ' + localStorage.getItem('token'), 'Content-Type':'application/json' }; }
+
+  document.getElementById('save_btn').onclick = async ()=>{
+    const xml = Blockly.Xml.workspaceToDom(workspace);
+    const xmlText = Blockly.Xml.domToText(xml);
+    const name = document.getElementById('project_name').value;
+    const res = await fetch('/api/project/save', {method:'POST', headers: authHeaders(), body: JSON.stringify({name, json: xmlText})});
+    const j = await res.json();
+    alert('Sauvegardé: ' + JSON.stringify(j));
+  };
+
+  document.getElementById('run_btn').onclick = ()=>{
+    const code = Blockly.JavaScript.workspaceToCode(workspace);
+    document.getElementById('simframe').contentWindow.postMessage({type:'run_code', code}, '*');
+  };
+
+  document.getElementById('submit_btn').onclick = async ()=>{
+    // For demo: fetch projects and submit last one
+    const res = await fetch('/api/projects', {headers: authHeaders()});
+    const j = await res.json();
+    const my = j.projects && j.projects[0];
+    if(!my){ alert('Enregistre d'abord'); return; }
+    await fetch('/api/project/submit/' + my._id, {method:'POST', headers: authHeaders()});
+    alert('Soumis');
+  };
+</script>
+</body></html>
