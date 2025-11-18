@@ -1,152 +1,224 @@
 <!doctype html>
+
 <html>
 <head>
-<meta charset="utf-8">
-<title>Simulation 3D</title>
-
-<style>
-  body {
-    margin: 0;
-    background: #111;
-    color: white;
-    font-family: Arial;
-  }
-
-  #sim_container {
-    width: 100%;
-    height: 600px !important;
-    min-height: 600px;
-    border: 2px solid #333;
-    background: #000;
-    box-sizing: border-box;
-  }
-</style>
-
+  <meta charset="utf-8">
+  <title>Simulateur 3D — debug</title>
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <style>
+    body{margin:0;background:#111;color:#fff;font-family:Arial,Helvetica,sans-serif}
+    h2{padding:10px;margin:0 0 8px 0}
+    #sim_container{width:100%;height:600px;border-top:1px solid #222;background:#000;box-sizing:border-box;position:relative}
+    #sim_logs{position:absolute;left:8px;top:8px;color:#fff;background:rgba(0,0,0,0.5);padding:6px;border-radius:4px;z-index:50;font-size:12px}
+    #out{white-space:pre-wrap;font-size:12px;padding:8px;background:#111;border-top:1px solid #222}
+  </style>
 </head>
 <body>
+  <h2>Simulateur 3D — Debug</h2>
+  <div id="sim_container"><div id="sim_logs">Initialisation...</div></div>
+  <div style="padding:10px">
+    <button id="checkBtn">Vérifier ressources & état</button>
+    <div id="out"></div>
+  </div>
 
-<h2 style="padding:10px;">Simulateur 3D – Robots</h2>
-<div id="sim_container"></div>
+  <script>
+    // quick logger
+    function slog(...a){ try{ document.getElementById('sim_logs').textContent = a.join(' '); }catch(e){} console.log.apply(console,a);
+      try{ const o=document.getElementById('out'); if(o) o.textContent += a.join(' ') + '\\n'; }catch(e){} }
 
-<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r152/three.min.js"></script>
-<script src="https://unpkg.com/cannon-es/dist/cannon-es.js"></script>
+    // small helper to load a script and return a Promise
+    function loadScript(url){
+      return new Promise((res, rej) => {
+        const s = document.createElement('script');
+        s.src = url; s.async = false;
+        s.onload = () => { slog('loaded', url); res(url); };
+        s.onerror = (e) => { slog('error loading', url); rej(e); };
+        document.head.appendChild(s);
+      });
+    }
 
-<script>
-let scene, camera, renderer, world, robots = [];
+    // try multiple CDNs for three + cannon
+    async function loadLibs(){
+      const threeCandidates = [
+        'https://cdnjs.cloudflare.com/ajax/libs/three.js/r152/three.min.js',
+        'https://unpkg.com/three@0.152.0/build/three.min.js',
+        'https://cdn.jsdelivr.net/npm/three@0.152.0/build/three.min.js'
+      ];
+      const cannonCandidates = [
+        'https://unpkg.com/cannon-es/dist/cannon-es.js',
+        'https://cdn.jsdelivr.net/npm/cannon-es@0.20.0/dist/cannon-es.js'
+      ];
 
-/*------------------------------------------
-  INITIALISATION
--------------------------------------------*/
-function init() {
-  const container = document.getElementById('sim_container');
+      // load three
+      let ok=false;
+      for(const u of threeCandidates){
+        try{ await loadScript(u); if(window.THREE){ ok=true; break; } }catch(e){ /* continue */ }
+      }
+      if(!ok){ slog('Impossible de charger three.js'); return false; }
 
-  // FIX : garantie que le conteneur ait une vraie taille
-  const W = container.clientWidth;
-  const H = container.clientHeight;
-  console.log("Taille conteneur:", W, H);
+      // load cannon
+      ok=false;
+      for(const u of cannonCandidates){
+        try{ await loadScript(u); if(window.CANNON){ ok=true; break; } }catch(e){ /* continue */ }
+      }
+      if(!ok){ slog('Impossible de charger cannon-es'); return false; }
 
-  scene = new THREE.Scene();
-  camera = new THREE.PerspectiveCamera(60, W / H, 0.1, 1000);
-  camera.position.set(6, 4, 6);
-  camera.lookAt(0, 0, 0);
+      slog('Libs OK:', typeof THREE, typeof CANNON);
+      return true;
+    }
 
-  renderer = new THREE.WebGLRenderer({ antialias: true });
-  renderer.setSize(W, H);
-  container.appendChild(renderer.domElement);
+    // main simulation (robuste)
+    let scene, camera, renderer, world, robots=[];
+    function startSim(){
+      try{
+        const container = document.getElementById('sim_container');
+        const W = container.clientWidth || 800;
+        const H = container.clientHeight || 600;
+        slog('Container size', W, H);
 
-  // LUMIÈRE FIX
-  const light = new THREE.DirectionalLight(0xffffff, 1.2);
-  light.position.set(5, 10, 5);
-  scene.add(light);
+        scene = new THREE.Scene();
+        camera = new THREE.PerspectiveCamera(60, W/H, 0.1, 1000);
+        camera.position.set(6,4,6); camera.lookAt(0,0,0);
 
-  // sol visuel
-  const floor = new THREE.Mesh(
-    new THREE.PlaneGeometry(40, 40),
-    new THREE.MeshStandardMaterial({ color: 0x404040 })
-  );
-  floor.rotation.x = -Math.PI / 2;
-  scene.add(floor);
+        renderer = new THREE.WebGLRenderer({antialias:true});
+        renderer.setSize(W,H);
+        renderer.setPixelRatio(window.devicePixelRatio || 1);
+        renderer.setClearColor(0x111111);
+        // remove existing canvas if any
+        const existing = container.querySelector('canvas');
+        if(existing) existing.remove();
+        container.appendChild(renderer.domElement);
+        slog('Renderer ajouté');
 
-  // Physique
-  world = new CANNON.World();
-  world.gravity.set(0, -9.82, 0);
+        const light = new THREE.DirectionalLight(0xffffff,1.2); light.position.set(5,10,5); scene.add(light);
+        scene.add(new THREE.AmbientLight(0x666666,0.6));
 
-  const groundBody = new CANNON.Body({
-    mass: 0,
-    shape: new CANNON.Plane()
-  });
-  groundBody.quaternion.setFromEuler(-Math.PI / 2, 0, 0);
-  world.addBody(groundBody);
+        const floor = new THREE.Mesh(new THREE.PlaneGeometry(40,40), new THREE.MeshStandardMaterial({color:0x303030}));
+        floor.rotation.x = -Math.PI/2; scene.add(floor);
 
-  // Ajoute 1 robot (test)
-  addRobot(0, 1, 0);
+        // physics safe init
+        try {
+          world = new CANNON.World();
+          if(world && world.gravity && typeof world.gravity.set === 'function'){
+            world.gravity.set(0,-9.82,0);
+          } else {
+            world.gravity = new CANNON.Vec3(0,-9.82,0);
+          }
+          const groundBody = new CANNON.Body({ mass:0 });
+          groundBody.addShape(new CANNON.Plane());
+          groundBody.quaternion.setFromEuler(-Math.PI/2,0,0);
+          world.addBody(groundBody);
+          slog('Physics ok');
+        } catch(e){
+          slog('Physics init failed:', e && e.message ? e.message : e);
+          // still continue without physics: create a fake world wrapper with step no-op
+          world = { step: function(){} };
+        }
 
-  animate();
-}
+        // create test object
+        addRobot(0,1,0);
 
-/*------------------------------------------
-  AJOUT ROBOT
--------------------------------------------*/
-function addRobot(x, y, z) {
-  const geo = new THREE.BoxGeometry(1, 1, 1);
-  const mat = new THREE.MeshStandardMaterial({ color: Math.random() * 0xffffff });
+        // one render immediately to show something even if animate doesn't start
+        try { renderer.render(scene, camera); } catch(e){ slog('Immediate render failed:', e); }
 
-  const mesh = new THREE.Mesh(geo, mat);
-  mesh.position.set(x, y, z);
-  scene.add(mesh);
+        // start loop
+        requestAnimationFrame(loop);
+        window.addEventListener('resize', handleResize);
+        slog('Simulation démarrée');
+      } catch(e){
+        slog('startSim error:', e && e.message ? e.message : e);
+        console.error(e);
+      }
+    }
 
-  const body = new CANNON.Body({
-    mass: 1,
-    shape: new CANNON.Box(new CANNON.Vec3(0.5, 0.5, 0.5)),
-    position: new CANNON.Vec3(x, y, z)
-  });
-  world.addBody(body);
+    function addRobot(x=0,y=1,z=0){
+      if(!scene){ slog('addRobot: scene non prête'); return -1; }
+      const geo = new THREE.BoxGeometry(1,1,1);
+      const mat = new THREE.MeshStandardMaterial({ color: Math.floor(Math.random()*0xffffff) });
+      const mesh = new THREE.Mesh(geo, mat);
+      mesh.position.set(x,y,z);
+      scene.add(mesh);
+      // try physics body, if world supports addBody
+      try{
+        if(world && typeof world.addBody === 'function'){
+          const body = new CANNON.Body({ mass:1 });
+          body.addShape(new CANNON.Box(new CANNON.Vec3(0.5,0.5,0.5)));
+          body.position.set(x,y,z);
+          world.addBody(body);
+          robots.push({mesh, body});
+        } else {
+          robots.push({mesh, body:null});
+        }
+      }catch(e){
+        console.warn('addRobot physics error', e);
+        robots.push({mesh, body:null});
+      }
+      return robots.length-1;
+    }
 
-  robots.push({ mesh, body });
-}
+    function loop(){
+      try{
+        if(world && typeof world.step === 'function') {
+          try { world.step(1/60); } catch(e){ /* ignore physics step errors */ }
+        }
+        robots.forEach(r => {
+          if(r.body && r.mesh){
+            r.mesh.position.copy(r.body.position);
+            r.mesh.quaternion.copy(r.body.quaternion);
+          }
+        });
+        if(renderer && camera) renderer.render(scene,camera);
+      } catch(e){
+        console.error('Loop error', e);
+        slog('Loop error: ' + (e && e.message ? e.message : e));
+      }
+      requestAnimationFrame(loop);
+    }
 
-/*------------------------------------------
-  ANIMATION
--------------------------------------------*/
-function animate() {
-  requestAnimationFrame(animate);
+    function handleResize(){
+      const container = document.getElementById('sim_container');
+      if(!container || !renderer || !camera) return;
+      camera.aspect = container.clientWidth / container.clientHeight;
+      camera.updateProjectionMatrix();
+      renderer.setSize(container.clientWidth, container.clientHeight);
+    }
 
-  world.step(1 / 60);
-  robots.forEach(r => {
-    r.mesh.position.copy(r.body.position);
-    r.mesh.quaternion.copy(r.body.quaternion);
-  });
+    // button for quick checks
+    document.getElementById('checkBtn').addEventListener('click', async ()=>{
+      slog('Vérification des ressources...');
+      const paths = ['/sim.html','/frontend/sim.html','/robots/drone.js','/robots/rover.js','/css/style.css'];
+      for(const p of paths){
+        try{
+          const r = await fetch(p);
+          slog(p + ' => ' + r.status);
+        }catch(e){ slog(p + ' => fetch error: ' + e); }
+      }
+      slog('globals: THREE=' + typeof THREE + ', CANNON=' + typeof CANNON + ', addRobot=' + typeof window.addRobot);
+    });
 
-  renderer.render(scene, camera);
-}
-
-/*------------------------------------------
-  API pour Blockly
--------------------------------------------*/
-const robot_api = {
-  move(dist, id = 0) {
-    if (!robots[id]) return;
-    const forward = new CANNON.Vec3(0, 0, -1);
-    robots[id].body.applyImpulse(forward.scale(dist * 0.5), robots[id].body.position);
-  },
-
-  turn(angle, id = 0) {
-    if (!robots[id]) return;
-    robots[id].body.angularVelocity.set(0, angle * 0.02, 0);
-  }
-};
-
-window.addEventListener("message", ev => {
-  if (!ev.data || ev.data.type !== "run_code") return;
-  const code = ev.data.code;
-
-  const AsyncFunction = Object.getPrototypeOf(async function() {}).constructor;
-  const fn = new AsyncFunction("robot_api", code);
-  fn(robot_api).catch(console.error);
-});
-
-init();
-</script>
+    // main bootstrap
+    (async function bootstrap(){
+      slog('Bootstrap: loading libs...');
+      const ok = await loadLibs();
+      if(!ok){ slog('Une ou plusieurs libs n’ont pas pu être chargées. Voir console.'); return; }
+      slog('Libs chargées, démarrage simulation');
+      startSim();
+      // after start, try loading robot scripts if present
+      try{
+        // load robot scripts if available (non-blocking)
+        const base = window.location.pathname.startsWith('/frontend') ? './robots/' : 'robots/';
+        ['drone.js','rover.js'].forEach(name=>{
+          const url = base + name;
+          const s = document.createElement('script'); s.src = url; s.async = true;
+          s.onload = ()=> slog(name + ' loaded');
+          s.onerror = ()=> slog(name + ' not found at ' + url);
+          document.head.appendChild(s);
+        });
+      }catch(e){ console.error(e); }
+    })();
+  </script>
 
 </body>
 </html>
+
+
