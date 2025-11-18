@@ -1,35 +1,29 @@
-// server.js — version corrigée, simple, fiable pour Render
 const express = require("express");
 const path = require("path");
-
 const app = express();
 
-// Active JSON pour API
-app.use(express.json());
-
-// Sert le dossier frontend correctement
+// Sert tout le dossier frontend à la racine du site
 app.use(express.static(path.join(__dirname, "frontend")));
 
-// Page d’accueil -> index.html
+// Page d’accueil
 app.get("/", (req, res) => {
   res.sendFile(path.join(__dirname, "frontend", "index.html"));
 });
 
-// Catch-all pour toutes les pages HTML
+// Route automatique pour toutes les pages HTML
 app.get("/:page", (req, res) => {
   const file = req.params.page;
+  const filePath = path.join(__dirname, "frontend", file);
 
-  // Sert directement la page demandée si elle existe
-  res.sendFile(
-    path.join(__dirname, "frontend", file),
-    (err) => {
-      if (err) {
-        res.status(404).send("Page introuvable");
-      }
+  res.sendFile(filePath, (err) => {
+    if (err) {
+      res.status(404).send("Page introuvable");
     }
-  );
+  });
 });
 
-// Lancement serveur
+// Démarrage du serveur
 const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => console.log("🚀 Serveur en ligne sur le port " + PORT));
+app.listen(PORT, () => {
+  console.log(`Serveur lancé sur le port ${PORT}`);
+});
