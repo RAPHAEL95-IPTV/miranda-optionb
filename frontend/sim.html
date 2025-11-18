@@ -1,185 +1,150 @@
 <!doctype html>
-<html lang="fr">
+<html>
 <head>
 <meta charset="utf-8">
-<title>Simulation 3D Robots</title>
-
-<link rel="stylesheet" href="/css/style.css">
+<title>Simulation 3D</title>
 
 <style>
   body {
-    background:#0f0f0f;
-    color:white;
-    font-family:Arial;
-    margin:0;
-    padding:20px;
+    margin: 0;
+    background: #111;
+    color: white;
+    font-family: Arial;
   }
-  h1 {
-    text-align:center;
-  }
+
   #sim_container {
     width: 100%;
-    height: 600px;
-    background: #181818;
+    height: 600px !important;
+    min-height: 600px;
     border: 2px solid #333;
-    border-radius: 12px;
-    margin-top: 20px;
+    background: #000;
+    box-sizing: border-box;
   }
 </style>
-</head>
 
+</head>
 <body>
 
-<h1>Simulateur 3D — Robots</h1>
-
+<h2 style="padding:10px;">Simulateur 3D – Robots</h2>
 <div id="sim_container"></div>
 
-<!-- Librairies -->
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r152/three.min.js"></script>
 <script src="https://unpkg.com/cannon-es/dist/cannon-es.js"></script>
 
 <script>
-/* ============================================================
-   VARIABLES PRINCIPALES
-============================================================ */
-let scene, camera, renderer, world;
-let robots = [];
+let scene, camera, renderer, world, robots = [];
 
-/* ============================================================
-   INITIALISATION SIMULATEUR
-============================================================ */
+/*------------------------------------------
+  INITIALISATION
+-------------------------------------------*/
 function init() {
-    const container = document.getElementById('sim_container');
-    if (!container) {
-        console.error("ERREUR : #sim_container introuvable !");
-        return;
-    }
+  const container = document.getElementById('sim_container');
 
-    /* --- THREE.JS --- */
-    scene = new THREE.Scene();
-    scene.background = new THREE.Color(0x202020);
+  // FIX : garantie que le conteneur ait une vraie taille
+  const W = container.clientWidth;
+  const H = container.clientHeight;
+  console.log("Taille conteneur:", W, H);
 
-    camera = new THREE.PerspectiveCamera(
-        60,
-        container.clientWidth / container.clientHeight,
-        0.1,
-        1000
-    );
-    camera.position.set(0, 10, 15);
-    camera.lookAt(0, 0, 0);
+  scene = new THREE.Scene();
+  camera = new THREE.PerspectiveCamera(60, W / H, 0.1, 1000);
+  camera.position.set(6, 4, 6);
+  camera.lookAt(0, 0, 0);
 
-    renderer = new THREE.WebGLRenderer({ antialias: true });
-    renderer.setSize(container.clientWidth, container.clientHeight);
-    container.appendChild(renderer.domElement);
+  renderer = new THREE.WebGLRenderer({ antialias: true });
+  renderer.setSize(W, H);
+  container.appendChild(renderer.domElement);
 
-    const light = new THREE.DirectionalLight(0xffffff, 1);
-    light.position.set(10, 10, 5);
-    scene.add(light);
+  // LUMIÈRE FIX
+  const light = new THREE.DirectionalLight(0xffffff, 1.2);
+  light.position.set(5, 10, 5);
+  scene.add(light);
 
-    /* --- SOL --- */
-    const groundMesh = new THREE.Mesh(
-        new THREE.PlaneGeometry(50, 50),
-        new THREE.MeshStandardMaterial({ color: 0x808080 })
-    );
-    groundMesh.rotation.x = -Math.PI / 2;
-    scene.add(groundMesh);
+  // sol visuel
+  const floor = new THREE.Mesh(
+    new THREE.PlaneGeometry(40, 40),
+    new THREE.MeshStandardMaterial({ color: 0x404040 })
+  );
+  floor.rotation.x = -Math.PI / 2;
+  scene.add(floor);
 
-    /* --- PHYSIQUE CANNON --- */
-    world = new CANNON.World();
-    world.gravity.set(0, -9.82, 0);
+  // Physique
+  world = new CANNON.World();
+  world.gravity.set(0, -9.82, 0);
 
-    const groundBody = new CANNON.Body({
-        mass: 0,
-        shape: new CANNON.Plane()
-    });
-    groundBody.quaternion.setFromEuler(-Math.PI / 2, 0, 0);
-    world.addBody(groundBody);
+  const groundBody = new CANNON.Body({
+    mass: 0,
+    shape: new CANNON.Plane()
+  });
+  groundBody.quaternion.setFromEuler(-Math.PI / 2, 0, 0);
+  world.addBody(groundBody);
 
-    /* --- AJOUT AUTOMATIQUE DE ROBOTS --- */
-    for (let i = 0; i < 4; i++) {
-        addRobot(i * 2 - 3, 1, 0);
-    }
+  // Ajoute 1 robot (test)
+  addRobot(0, 1, 0);
 
-    animate();
+  animate();
 }
 
-/* ============================================================
-   AJOUT ROBOT
-============================================================ */
+/*------------------------------------------
+  AJOUT ROBOT
+-------------------------------------------*/
 function addRobot(x, y, z) {
-    const geometry = new THREE.BoxGeometry(1, 1, 1);
-    const material = new THREE.MeshStandardMaterial({
-        color: Math.floor(Math.random() * 0xffffff)
-    });
+  const geo = new THREE.BoxGeometry(1, 1, 1);
+  const mat = new THREE.MeshStandardMaterial({ color: Math.random() * 0xffffff });
 
-    const mesh = new THREE.Mesh(geometry, material);
-    mesh.position.set(x, y, z);
-    scene.add(mesh);
+  const mesh = new THREE.Mesh(geo, mat);
+  mesh.position.set(x, y, z);
+  scene.add(mesh);
 
-    const body = new CANNON.Body({
-        mass: 1,
-        shape: new CANNON.Box(new CANNON.Vec3(0.5, 0.5, 0.5)),
-        position: new CANNON.Vec3(x, y, z)
-    });
-    world.addBody(body);
+  const body = new CANNON.Body({
+    mass: 1,
+    shape: new CANNON.Box(new CANNON.Vec3(0.5, 0.5, 0.5)),
+    position: new CANNON.Vec3(x, y, z)
+  });
+  world.addBody(body);
 
-    const id = robots.length;
-    robots.push({ id, mesh, body });
-    return id;
+  robots.push({ mesh, body });
 }
 
-/* ============================================================
-   ANIMATION
-============================================================ */
+/*------------------------------------------
+  ANIMATION
+-------------------------------------------*/
 function animate() {
-    requestAnimationFrame(animate);
+  requestAnimationFrame(animate);
 
-    world.step(1 / 60);
+  world.step(1 / 60);
+  robots.forEach(r => {
+    r.mesh.position.copy(r.body.position);
+    r.mesh.quaternion.copy(r.body.quaternion);
+  });
 
-    robots.forEach(r => {
-        r.mesh.position.copy(r.body.position);
-        r.mesh.quaternion.copy(r.body.quaternion);
-    });
-
-    renderer.render(scene, camera);
+  renderer.render(scene, camera);
 }
 
-/* ============================================================
-   API POUR SCRATCH / ÉDITEUR
-============================================================ */
+/*------------------------------------------
+  API pour Blockly
+-------------------------------------------*/
 const robot_api = {
-    move: function (dist, robotIndex = 0) {
-        const r = robots[robotIndex];
-        if (!r) return;
-        const forward = new CANNON.Vec3(0, 0, -1);
-        r.body.applyImpulse(forward.scale(dist * 0.5), r.body.position);
-    },
-    turn: function (angleDeg, robotIndex = 0) {
-        const r = robots[robotIndex];
-        if (!r) return;
-        r.body.angularVelocity.set(0, angleDeg * 0.02, 0);
-    }
+  move(dist, id = 0) {
+    if (!robots[id]) return;
+    const forward = new CANNON.Vec3(0, 0, -1);
+    robots[id].body.applyImpulse(forward.scale(dist * 0.5), robots[id].body.position);
+  },
+
+  turn(angle, id = 0) {
+    if (!robots[id]) return;
+    robots[id].body.angularVelocity.set(0, angle * 0.02, 0);
+  }
 };
 
-/* ============================================================
-   RÉCEPTION DU CODE DE L’ÉDITEUR
-============================================================ */
-window.addEventListener("message", (ev) => {
-    if (ev.data && ev.data.type === "run_code") {
-        const code = ev.data.code;
-        try {
-            const AsyncFunction = Object.getPrototypeOf(async function () {}).constructor;
-            const fn = new AsyncFunction("robot_api", code);
-            fn(robot_api).catch(e => console.error(e));
-        } catch (e) {
-            console.error("Erreur exécution code :", e);
-        }
-    }
+window.addEventListener("message", ev => {
+  if (!ev.data || ev.data.type !== "run_code") return;
+  const code = ev.data.code;
+
+  const AsyncFunction = Object.getPrototypeOf(async function() {}).constructor;
+  const fn = new AsyncFunction("robot_api", code);
+  fn(robot_api).catch(console.error);
 });
 
-/* ============================================================
-   DÉMARRAGE
-============================================================ */
 init();
 </script>
 
