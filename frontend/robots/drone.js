@@ -1,22 +1,24 @@
-// Drone simple
-window.Simulator = window.Simulator || {};
-
-if (window.Simulator.registerRobot) {
-  window.Simulator.registerRobot({
-    id: 'drone',
-    name: 'Drone',
-    color: '#2b9',
-    width: '80px',
-    height: '40px',
-    onRender: (el) => {
-      el.style.borderRadius = '6px';
-      // animation simple de flottement
-      if (el.animate) {
-        el.animate(
-          [{ transform: 'translateY(0px)' }, { transform: 'translateY(-14px)' }, { transform: 'translateY(0px)' }],
-          { duration: 1800, iterations: Infinity, easing: 'ease-in-out' }
-        );
-      }
-    }
-  });
-}// drone robot placeholder
+(function(){
+ // Drone compatible avec la sim 3D existante (uses addRobot)
+ let tries = 0;
+ const maxTries = 50; // 50 * 100ms = 5s max d'attente
+ const iv = setInterval(() => {
+ if (typeof addRobot === 'function') {
+ try {
+ const id = addRobot(0, 1.2, 0);
+ window.Simulator = window.Simulator || {};
+ window.Simulator.droneId = id;
+ console.log('drone.js: drone created id=', id);
+ } catch (e) {
+ console.error('drone.js: erreur lors de addRobot', e);
+ }
+ clearInterval(iv);
+ return;
+ }
+ tries++;
+ if (tries >= maxTries) {
+ console.warn('drone.js: addRobot introuvable après attente — le script a abandonné');
+ clearInterval(iv);
+ }
+ }, 100);
+})();
