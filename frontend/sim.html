@@ -227,15 +227,20 @@ window.addEventListener("message", ev => {
 </script>
 
 <!-- ----------------------------------------------------------
-     AJOUT BLOCS Blockly + BOUTON PLAY (NE MODIFIE RIEN DU CODE EXISTANT)
+     BLOCS Blockly COMPLET + DROPDOWN Robot + PLAY
+     TOUT AJOUTÉ SANS MODIFIER LE SIMULATEUR EXISTANT
 ----------------------------------------------------------- -->
 
-<!-- Div Blockly -->
-<div id="blocklyDiv" style="height: 400px; width: 400px; float:left; border:1px solid #333; margin:10px"></div>
+<div style="display:flex; flex-direction:row;">
+  <!-- Div Blockly -->
+  <div id="blocklyDiv" style="height:400px; width:400px; border:1px solid #333; margin:10px;"></div>
 
-<!-- Bouton Play -->
-<div style="padding:10px; float:left;">
-  <button onclick="runBlockly()" style="padding:10px 16px; background:#0af; color:#fff; border:none; border-radius:4px; cursor:pointer;">▶ Play Blockly</button>
+  <!-- Panel contrôle Blockly -->
+  <div style="padding:10px;">
+    <label for="robotSelect">Robot à contrôler :</label>
+    <select id="robotSelect" style="margin-bottom:10px; display:block; padding:4px;"></select>
+    <button onclick="runBlockly()" style="padding:10px 16px; background:#0af; color:#fff; border:none; border-radius:4px; cursor:pointer;">▶ Play Blockly</button>
+  </div>
 </div>
 
 <!-- Blockly libs -->
@@ -243,10 +248,41 @@ window.addEventListener("message", ev => {
 <link rel="stylesheet" href="https://unpkg.com/blockly/media/blockly.css">
 
 <script>
+// -----------------------------------------------------------
+// Gestion du dropdown robot
+// -----------------------------------------------------------
+function updateRobotDropdown(){
+  const sel = document.getElementById("robotSelect");
+  sel.innerHTML = "";
+  robots.forEach((r, i)=>{
+    const opt = document.createElement("option");
+    opt.value = i;
+    opt.text = `${r.type} - ID ${i}`;
+    sel.appendChild(opt);
+  });
+}
+
+// Hook sur ajout robot pour mettre à jour dropdown
+const originalAddRobotB = addRobotB;
+addRobotB = function(){
+  originalAddRobotB();
+  updateRobotDropdown();
+};
+const originalAddRobotC = addRobotC;
+addRobotC = function(){
+  originalAddRobotC();
+  updateRobotDropdown();
+};
+
+// Initialisation dropdown au chargement
+updateRobotDropdown();
+
+// -----------------------------------------------------------
 // Initialisation Blockly
+// -----------------------------------------------------------
 const workspace = Blockly.inject('blocklyDiv', {
   toolbox: `
-    <xml>
+    <xml xmlns="https://developers.google.com/blockly/xml">
       <block type="move_forward"></block>
       <block type="turn_right"></block>
       <block type="turn_left"></block>
@@ -255,7 +291,9 @@ const workspace = Blockly.inject('blocklyDiv', {
   trashcan: true
 });
 
-// Définition blocs
+// -----------------------------------------------------------
+// Définition des blocs
+// -----------------------------------------------------------
 Blockly.defineBlocksWithJsonArray([
   {
     "type": "move_forward",
@@ -283,31 +321,37 @@ Blockly.defineBlocksWithJsonArray([
   }
 ]);
 
+// -----------------------------------------------------------
 // Génération JS depuis Blockly
+// -----------------------------------------------------------
 Blockly.JavaScript['move_forward'] = function(block) {
-  var value = block.getFieldValue('DIST');
+  const value = block.getFieldValue('DIST');
   return `robot_api.move(selectedRobotId, ${value});\n`;
 };
 Blockly.JavaScript['turn_right'] = function(block) {
-  var value = block.getFieldValue('ANGLE');
+  const value = block.getFieldValue('ANGLE');
   return `robot_api.turn(selectedRobotId, ${value});\n`;
 };
 Blockly.JavaScript['turn_left'] = function(block) {
-  var value = block.getFieldValue('ANGLE');
+  const value = block.getFieldValue('ANGLE');
   return `robot_api.turn(selectedRobotId, -${value});\n`;
 };
 
+// -----------------------------------------------------------
 // Exécution Blockly
+// -----------------------------------------------------------
 function runBlockly(){
-  if(typeof robots === 'undefined' || robots.length === 0){
+  if(robots.length === 0){
     alert("Ajoutez d'abord un robot !");
     return;
   }
+  const sel = document.getElementById("robotSelect");
+  const selectedRobotId = parseInt(sel.value);
+
   const code = Blockly.JavaScript.workspaceToCode(workspace);
   try{
     const AsyncFn = Object.getPrototypeOf(async function(){}).constructor;
     const fn = new AsyncFn("robot_api", "selectedRobotId", code);
-    const selectedRobotId = robots.length-1;
     fn(window.robot_api, selectedRobotId);
   } catch(e){
     console.error(e);
