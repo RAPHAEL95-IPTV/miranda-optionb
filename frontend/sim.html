@@ -2,304 +2,117 @@
 <html>
 <head>
   <meta charset="utf-8">
-  <title>Simulateur 3D — Final</title>
+  <title>Simulateur 3D — Version stable sans CANNON</title>
   <meta name="viewport" content="width=device-width,initial-scale=1">
 
   <style>
-    body { margin:0;background:#111;color:#fff;font-family:Arial,Helvetica,sans-serif }
-    h2 { padding:10px;margin:0 0 8px 0 }
+    body { margin:0;background:#111;color:#fff;font-family:Arial }
+    h2 { padding:10px }
     #sim_container {
       width:100%;
       height:600px;
       background:#000;
-      border-top:1px solid #222;
       position:relative;
-      box-sizing:border-box;
       overflow:hidden;
     }
     #sim_container canvas {
-      width:100% !important;
-      height:100% !important;
-      display:block !important;
+      width:100%!important;
+      height:100%!important;
+      display:block;
     }
     #sim_logs {
       position:absolute;
       left:8px;
       top:8px;
-      color:#fff;
-      background:rgba(0,0,0,0.55);
       padding:6px;
+      background:rgba(0,0,0,0.6);
+      font-size:12px;
       border-radius:4px;
-      z-index:20;
-      font-size:12px;
-    }
-    #out {
-      white-space:pre-wrap;
-      font-size:12px;
-      padding:8px;
-      background:#181818;
-      border-top:1px solid #222;
+      z-index:10;
     }
   </style>
 </head>
 
 <body>
-  <h2>Simulateur 3D ― Final</h2>
-
+  <h2>Simulateur 3D — Stable</h2>
   <div id="sim_container">
     <div id="sim_logs">Initialisation…</div>
   </div>
 
-  <div style="padding:10px">
-    <button id="checkBtn">Vérifier ressources</button>
-    <div id="out"></div>
-  </div>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r152/three.min.js"></script>
 
   <script>
-    /* ----------------------------------------------------------
-       LOGGER
-    ---------------------------------------------------------- */
-    function slog(...msg){
-      const s = document.getElementById('sim_logs');
-      const o = document.getElementById('out');
-      if(s) s.textContent = msg.join(" ");
-      if(o) o.textContent += msg.join(" ") + "\n";
-      console.log(...msg);
+    function slog(msg){
+      const box = document.getElementById("sim_logs");
+      box.textContent = msg;
+      console.log(msg);
     }
 
+    let scene, camera, renderer, robot;
 
-    /* ----------------------------------------------------------
-       CHARGEMENT ROBUSTE DES LIBS 3D
-    ---------------------------------------------------------- */
-    function loadScript(url){
-      return new Promise((res, rej)=>{
-        const s = document.createElement('script');
-        s.src = url;
-        s.async = false;
-        s.onload = ()=>res(true);
-        s.onerror = ()=>rej(url);
-        document.head.appendChild(s);
-      });
-    }
+    function init(){
+      slog("Chargement THREE.js OK");
 
-    async function load3DLibs(){
-      const threeCDN = [
-        "https://cdnjs.cloudflare.com/ajax/libs/three.js/r152/three.min.js",
-        "https://unpkg.com/three@0.152.0/build/three.min.js",
-        "https://cdn.jsdelivr.net/npm/three@0.152.0/build/three.min.js"
-      ];
-
-      const cannonCDN = [
-        "https://unpkg.com/cannon-es/dist/cannon-es.js",
-        "https://cdn.jsdelivr.net/npm/cannon-es@0.20.0/dist/cannon-es.js"
-      ];
-
-      let ok = false;
-
-      for(const u of threeCDN){
-        try{ await loadScript(u); if(window.THREE){ ok=true; break; } }
-        catch(e){}
-      }
-      if(!ok){ slog("❌ Impossible de charger THREE.js"); return false; }
-
-      ok = false;
-      for(const u of cannonCDN){
-        try{ await loadScript(u); if(window.CANNON){ ok=true; break; } }
-        catch(e){}
-      }
-      if(!ok){ slog("❌ Impossible de charger CANNON-ES"); return false; }
-
-      slog("✔ Libs chargées : THREE & CANNON disponibles");
-      return true;
-    }
-
-
-    /* ----------------------------------------------------------
-       SIMULATION 3D
-    ---------------------------------------------------------- */
-    let scene, camera, renderer, world, robots=[];
-
-    function startSim(){
       const cont = document.getElementById("sim_container");
-      const W = cont.clientWidth;
-      const H = cont.clientHeight;
-
       scene = new THREE.Scene();
 
-      camera = new THREE.PerspectiveCamera(60, W/H, 0.1, 1000);
+      camera = new THREE.PerspectiveCamera(
+        60,
+        cont.clientWidth / cont.clientHeight,
+        0.1,
+        1000
+      );
       camera.position.set(6,4,6);
       camera.lookAt(0,0,0);
 
-      renderer = new THREE.WebGLRenderer({antialias:true});
-      renderer.setSize(W, H);
-      renderer.setPixelRatio(window.devicePixelRatio || 1);
+      renderer = new THREE.WebGLRenderer({ antialias:true });
+      renderer.setSize(cont.clientWidth, cont.clientHeight);
+      renderer.setPixelRatio(window.devicePixelRatio);
       renderer.setClearColor(0x111111);
-
       cont.innerHTML = "";
       cont.appendChild(renderer.domElement);
 
-      const dir = new THREE.DirectionalLight(0xffffff,1.2);
+      // LUMIÈRES
+      scene.add(new THREE.AmbientLight(0xffffff, 0.4));
+      const dir = new THREE.DirectionalLight(0xffffff, 0.8);
       dir.position.set(5,10,5);
       scene.add(dir);
 
-      scene.add(new THREE.AmbientLight(0x666666));
-
-      // sol
+      // SOL
       const floor = new THREE.Mesh(
         new THREE.PlaneGeometry(40,40),
-        new THREE.MeshStandardMaterial({color:0x333333})
+        new THREE.MeshStandardMaterial({ color:0x333333 })
       );
       floor.rotation.x = -Math.PI/2;
       scene.add(floor);
 
-      // physique
-      try{
-        world = new CANNON.World();
-        world.gravity.set(0,-9.82,0);
-
-        const g = new CANNON.Body({ mass:0 });
-        g.addShape(new CANNON.Plane());
-        g.quaternion.setFromEuler(-Math.PI/2,0,0);
-        world.addBody(g);
-
-      }catch(e){
-        slog("⚠ Problème physique — simulation sans CANNON");
-        world = { step:()=>{} };
-      }
-
-      addRobot(0,1,0);
-
-      window.addEventListener("resize", resizeSim);
-      requestAnimationFrame(loop);
-
-      slog("✔ Simulation prête");
-    }
-
-
-    function addRobot(x=0,y=1,z=0){
-      const box = new THREE.Mesh(
+      // ROBOT
+      robot = new THREE.Mesh(
         new THREE.BoxGeometry(1,1,1),
-        new THREE.MeshStandardMaterial({
-          color: Math.floor(Math.random()*0xffffff)
-        })
+        new THREE.MeshStandardMaterial({ color:0x00aaff })
       );
-      box.position.set(x,y,z);
-      scene.add(box);
+      robot.position.set(0,0.5,0);
+      scene.add(robot);
 
-      let body = null;
-      try{
-        body = new CANNON.Body({ mass:1 });
-        body.addShape(new CANNON.Box(new CANNON.Vec3(0.5,0.5,0.5)));
-        body.position.set(x,y,z);
-        world.addBody(body);
-      }catch(e){}
+      slog("Simulation prête ✓");
 
-      robots.push({mesh:box, body});
+      animate();
     }
 
-
-    function loop(){
-      try{
-        if(world && world.step) world.step(1/60);
-
-        robots.forEach(r=>{
-          if(r.body){
-            r.mesh.position.copy(r.body.position);
-            r.mesh.quaternion.copy(r.body.quaternion);
-          }
-        });
-
-        renderer.render(scene,camera);
-      }catch(e){
-        slog("Erreur loop: "+e);
-      }
-
-      requestAnimationFrame(loop);
+    function animate(){
+      requestAnimationFrame(animate);
+      robot.rotation.y += 0.01; // animation simple pour voir quelque chose
+      renderer.render(scene, camera);
     }
 
-
-    function resizeSim(){
+    window.addEventListener("resize", () => {
       const cont = document.getElementById("sim_container");
-      if(!cont || !renderer || !camera) return;
-      const W = cont.clientWidth;
-      const H = cont.clientHeight;
-      camera.aspect = W/H;
+      camera.aspect = cont.clientWidth / cont.clientHeight;
       camera.updateProjectionMatrix();
-      renderer.setSize(W,H);
-    }
+      renderer.setSize(cont.clientWidth, cont.clientHeight);
+    });
 
-
-    /* ----------------------------------------------------------
-       CHARGEMENT ROBUSTE DES ROBOTS
-    ---------------------------------------------------------- */
-    async function loadRobots(){
-      const robotsFiles = ["drone.js","rover.js"];
-
-      const bases = [
-        "/robots/",
-        "/frontend/robots/",
-        "./robots/",
-        "robots/"
-      ];
-
-      async function tryLoad(file){
-        for(const base of bases){
-          const url = base + file;
-          try{
-            const r = await fetch(url,{method:"HEAD"});
-            if(r.status===200){
-              const s = document.createElement("script");
-              s.src = url;
-              s.onload = ()=>slog("✔ "+file+" chargé depuis "+url);
-              s.onerror = ()=>slog("❌ échec chargement "+url);
-              document.head.appendChild(s);
-              return;
-            }
-          }catch(e){}
-        }
-        slog("❌ "+file+" introuvable dans toutes les bases");
-      }
-
-      for(const f of robotsFiles) await tryLoad(f);
-    }
-
-
-    /* ----------------------------------------------------------
-       BOUTON DE TEST
-    ---------------------------------------------------------- */
-    document.getElementById("checkBtn")
-      .addEventListener("click", async()=>{
-        slog("Vérification ressources…");
-
-        const files = [
-          "sim.html",
-          "robots/drone.js",
-          "robots/rover.js"
-        ];
-
-        for(const f of files){
-          try{
-            const r = await fetch(f);
-            slog(f+" → "+r.status);
-          }catch(e){
-            slog(f+" → erreur réseau");
-          }
-        }
-      });
-
-
-    /* ----------------------------------------------------------
-       BOOTSTRAP
-    ---------------------------------------------------------- */
-    (async ()=>{
-      slog("Chargement libs 3D…");
-      const ok = await load3DLibs();
-      if(!ok) return;
-
-      startSim();
-      loadRobots();
-    })();
-
+    init();
   </script>
 </body>
 </html>
