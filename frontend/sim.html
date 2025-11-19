@@ -26,8 +26,8 @@
   }
   #runBtn{
     position:fixed;
-    top: 10px;
-    right: 10px;
+    top:10px;
+    right:10px;
     background:#0f0;
     padding:10px 16px;
     border:none;
@@ -41,7 +41,7 @@
 
   #robotSelect{
     position:fixed;
-    top: 10px;
+    top:10px;
     right:130px;
     padding:8px;
     border-radius:4px;
@@ -51,7 +51,6 @@
 <script src="https://unpkg.com/blockly/blockly.min.js"></script>
 
 </head>
-
 <body>
 <h2>Simulateur 3D — Robots B & C</h2>
 
@@ -88,19 +87,9 @@ function addRobotB(){ robots.push(createRobotB()); updateRobotDropdown(); }
 function addRobotC(){ robots.push(createRobotC()); updateRobotDropdown(); }
 function resetSim(){ robots=[]; updateRobotDropdown(); }
 
-window.robot_api = {
-  move: async function(id, dist){
-    const r = robots[id]; if(!r) return;
-    const steps=20, dx=Math.cos(r.angle)*dist/steps, dy=Math.sin(r.angle)*dist/steps;
-    for(let i=0;i<steps;i++){ r.x+=dx; r.y+=dy; await new Promise(r=>setTimeout(r,20)); }
-  },
-  turn: async function(id, deg){
-    const r = robots[id]; if(!r) return;
-    const steps=20, da=deg*Math.PI/180/steps;
-    for(let i=0;i<steps;i++){ r.angle+=da; await new Promise(r=>setTimeout(r,20)); }
-  }
-};
+window.robot_api = {};
 
+/* DESSIN DES ROBOTS */
 function drawRobotB(r){
   ctx.save();
   ctx.translate(r.x,r.y); ctx.rotate(r.angle);
@@ -121,6 +110,7 @@ function drawRobotC(r){
   ctx.restore();
 }
 
+/* NAVIGATION */
 canvas.addEventListener("contextmenu",e=>e.preventDefault());
 canvas.addEventListener("mousedown",e=>{ if(e.button===2) isRightDragging=true; if(e.button===0) isLeftDragging=true; lastMouseX=e.clientX; lastMouseY=e.clientY; });
 canvas.addEventListener("mouseup",e=>{ if(e.button===2) isRightDragging=false; if(e.button===0) isLeftDragging=false; });
@@ -141,7 +131,7 @@ function loop(){
 requestAnimationFrame(loop);
 
 /* -------------------------------
-   BLOCKLY — BLOCS + TOOLBOX + PLAY
+   BLOCKLY — BLOCS + PLAY
 ------------------------------- */
 Blockly.defineBlocksWithJsonArray([
   { type:"move_forward", message0:"avancer de %1", args0:[{type:"field_number",name:"DIST",value:50}], previousStatement:null, nextStatement:null, colour:120 },
@@ -149,9 +139,9 @@ Blockly.defineBlocksWithJsonArray([
   { type:"turn_right", message0:"tourner à droite de %1°", args0:[{type:"field_number",name:"ANGLE",value:90}], previousStatement:null, nextStatement:null, colour:200 }
 ]);
 
-Blockly.JavaScript['move_forward'] = block => `await robot_api.move(getSelectedRobot(), ${block.getFieldValue('DIST')});\n`;
-Blockly.JavaScript['turn_left'] = block => `await robot_api.turn(getSelectedRobot(), -${block.getFieldValue('ANGLE')});\n`;
-Blockly.JavaScript['turn_right'] = block => `await robot_api.turn(getSelectedRobot(), ${block.getFieldValue('ANGLE')});\n`;
+Blockly.JavaScript['move_forward'] = block => `robot_api.moveSync(getSelectedRobot(), ${block.getFieldValue('DIST')});\n`;
+Blockly.JavaScript['turn_left'] = block => `robot_api.turnSync(getSelectedRobot(), -${block.getFieldValue('ANGLE')});\n`;
+Blockly.JavaScript['turn_right'] = block => `robot_api.turnSync(getSelectedRobot(), ${block.getFieldValue('ANGLE')});\n`;
 
 const toolbox=`<xml xmlns="https://developers.google.com/blockly/xml">
   <category name="Déplacement" colour="#4CAF50">
@@ -163,19 +153,31 @@ const toolbox=`<xml xmlns="https://developers.google.com/blockly/xml">
 
 const workspace = Blockly.inject('blocklyDiv',{toolbox:toolbox, trashcan:true});
 
+/* FONCTIONS SYNC POUR BLOCS */
+robot_api.moveSync = function(id, dist){
+  const r=robots[id]; if(!r) return;
+  const steps=20, dx=Math.cos(r.angle)*dist/steps, dy=Math.sin(r.angle)*dist/steps;
+  let i=0;
+  const interval=setInterval(()=>{ if(i>=steps){ clearInterval(interval); return; } r.x+=dx; r.y+=dy; i++; },20);
+};
+
+robot_api.turnSync = function(id, deg){
+  const r=robots[id]; if(!r) return;
+  const steps=20, da=deg*Math.PI/180/steps;
+  let i=0;
+  const interval=setInterval(()=>{ if(i>=steps){ clearInterval(interval); return; } r.angle+=da; i++; },20);
+};
+
 function getSelectedRobot(){
-  const sel = document.getElementById("robotSelect");
+  const sel=document.getElementById("robotSelect");
   return parseInt(sel.value);
 }
 
-async function runBlockly(){
+function runBlockly(){
   if(robots.length===0){ alert("Ajoute un robot !"); return; }
   const code = Blockly.JavaScript.workspaceToCode(workspace);
-  try{
-    const AsyncFn = Object.getPrototypeOf(async function(){}).constructor;
-    const fn = new AsyncFn("robot_api","getSelectedRobot", code);
-    await fn(window.robot_api, getSelectedRobot);
-  }catch(e){ console.error("Erreur Blockly:", e); }
+  try{ eval(code); }
+  catch(e){ console.error("Erreur Blockly:", e); }
 }
 
 function updateRobotDropdown(){
