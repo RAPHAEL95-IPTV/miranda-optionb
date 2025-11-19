@@ -6,52 +6,40 @@
 <title>Simulateur 3D Robots — B & C</title>
 
 <style>
-  body{margin:0;background:#111;color:#fff;font-family:Arial}
-  h2{margin:0;padding:10px;background:#222;color:#0af;border-bottom:2px solid #0af}
-  #toolbar{padding:10px;background:#000;border-bottom:1px solid #333}
-  #toolbar button{padding:8px 14px;margin-right:6px;background:#0af;border:none;color:#fff;border-radius:4px;cursor:pointer}
-  #toolbar button:hover{background:#08c}
-  #sim_container{width:100%;height:600px;position:relative;background:#000}
-  canvas{background:#000;display:block;margin:auto}
+body{margin:0;background:#111;color:#fff;font-family:Arial}
+h2{margin:0;padding:10px;background:#222;color:#0af;border-bottom:2px solid #0af}
+#toolbar{padding:10px;background:#000;border-bottom:1px solid #333}
+#toolbar button{padding:8px 14px;margin-right:6px;background:#0af;border:none;color:#fff;border-radius:4px;cursor:pointer}
+#toolbar button:hover{background:#08c}
+#sim_container{width:100%;height:600px;position:relative;background:#000}
+canvas{background:#000;display:block;margin:auto}
 
-  /* Zone Blockly */
-  #blocklyDiv{
-    position:fixed;
-    top:70px; right:10px;
-    width:420px;
-    height:580px;
-    background:#222;
-    border:2px solid #0af;
-    border-radius:8px;
-  }
-  #runBtn{
-    position:fixed;
-    top:10px;
-    right:10px;
-    background:#0f0;
-    padding:10px 16px;
-    border:none;
-    border-radius:6px;
-    color:#000;
-    cursor:pointer;
-    font-weight:bold;
-    font-size:16px;
-  }
-  #runBtn:hover{ background:#9f9; }
-
-  #robotSelect{
-    position:fixed;
-    top:10px;
-    right:130px;
-    padding:8px;
-    border-radius:4px;
-  }
+/* Blockly */
+#blocklyDiv{
+  position:fixed;
+  top:70px; right:10px;
+  width:420px; height:580px;
+  background:#222;
+  border:2px solid #0af;
+  border-radius:8px;
+}
+#runBtn{
+  position:fixed; top:10px; right:10px;
+  background:#0f0; padding:10px 16px;
+  border:none; border-radius:6px; color:#000;
+  cursor:pointer; font-weight:bold; font-size:16px;
+}
+#runBtn:hover{background:#9f9;}
+#robotSelect{
+  position:fixed; top:10px; right:130px; padding:8px; border-radius:4px;
+}
 </style>
 
 <script src="https://unpkg.com/blockly/blockly.min.js"></script>
 
 </head>
 <body>
+
 <h2>Simulateur 3D — Robots B & C</h2>
 
 <div id="toolbar">
@@ -131,7 +119,7 @@ function loop(){
 requestAnimationFrame(loop);
 
 /* -------------------------------
-   BLOCKLY — BLOCS + PLAY
+   BLOCKLY — BLOCS + PLAY FONCTIONNEL
 ------------------------------- */
 Blockly.defineBlocksWithJsonArray([
   { type:"move_forward", message0:"avancer de %1", args0:[{type:"field_number",name:"DIST",value:50}], previousStatement:null, nextStatement:null, colour:120 },
@@ -153,19 +141,16 @@ const toolbox=`<xml xmlns="https://developers.google.com/blockly/xml">
 
 const workspace = Blockly.inject('blocklyDiv',{toolbox:toolbox, trashcan:true});
 
-/* FONCTIONS SYNC POUR BLOCS */
+/* FONCTIONS DE DEPLACEMENT DIRECT POUR BLOCS */
 robot_api.moveSync = function(id, dist){
   const r=robots[id]; if(!r) return;
-  const steps=20, dx=Math.cos(r.angle)*dist/steps, dy=Math.sin(r.angle)*dist/steps;
-  let i=0;
-  const interval=setInterval(()=>{ if(i>=steps){ clearInterval(interval); return; } r.x+=dx; r.y+=dy; i++; },20);
+  r.x += Math.cos(r.angle)*dist;
+  r.y += Math.sin(r.angle)*dist;
 };
 
 robot_api.turnSync = function(id, deg){
   const r=robots[id]; if(!r) return;
-  const steps=20, da=deg*Math.PI/180/steps;
-  let i=0;
-  const interval=setInterval(()=>{ if(i>=steps){ clearInterval(interval); return; } r.angle+=da; i++; },20);
+  r.angle += deg*Math.PI/180;
 };
 
 function getSelectedRobot(){
@@ -175,9 +160,9 @@ function getSelectedRobot(){
 
 function runBlockly(){
   if(robots.length===0){ alert("Ajoute un robot !"); return; }
+  updateRobotDropdown();
   const code = Blockly.JavaScript.workspaceToCode(workspace);
-  try{ eval(code); }
-  catch(e){ console.error("Erreur Blockly:", e); }
+  try{ eval(code); } catch(e){ console.error("Erreur Blockly:", e); }
 }
 
 function updateRobotDropdown(){
