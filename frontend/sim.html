@@ -1,266 +1,177 @@
 <!doctype html>
-<html lang="fr">
+<html>
 <head>
-<meta charset="utf-8" />
-<meta name="viewport" content="width=device-width,initial-scale=1" />
-<title>Simulateur 3D - Autonome (sans Three/Cannon)</title>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Simulateur 3D Robots — B & C</title>
+
 <style>
-  html,body { height:100%; margin:0; background:#101010; color:#eee; font-family:Arial,Helvetica,sans-serif; }
-  header { padding:10px; }
-  #sim_container { width:100%; height:640px; background:#000; display:block; box-sizing:border-box; border-top:4px solid #222; position:relative; }
-  #log { padding:10px; font-size:13px; white-space:pre-wrap; background:#0f0f0f; color:#dcdcdc; max-height:160px; overflow:auto; }
-  #controls { padding:10px; }
-  button { margin-right:8px; padding:6px 10px; }
+  body{margin:0;background:#111;color:#fff;font-family:Arial}
+  h2{margin:0;padding:10px;background:#222;color:#0af;border-bottom:2px solid #0af}
+  #toolbar{padding:10px;background:#000;border-bottom:1px solid #333}
+  #toolbar button{padding:8px 14px;margin-right:6px;background:#0af;border:none;color:#fff;border-radius:4px;cursor:pointer}
+  #toolbar button:hover{background:#08c}
+  #sim_container{width:100%;height:600px;position:relative;background:#000}
+  canvas{background:#000;display:block;margin:auto}
 </style>
 </head>
+
 <body>
-  <header><h2 style="margin:0">Simulateur 3D — Version autonome</h2></header>
-  <div id="sim_container"></div>
-  <div id="controls">
-    <button id="btnAdd">Ajouter robot</button>
-    <button id="btnReset">Réinitialiser positions</button>
-    <span id="status" style="margin-left:12px;color:#9ad;"></span>
-  </div>
-  <div id="log"></div>
+<h2>Simulateur 3D — Robots B & C</h2>
+
+<div id="toolbar">
+  <button onclick="addRobotB()">➕ Ajouter Robot B (Wall-E)</button>
+  <button onclick="addRobotC()">➕ Ajouter Robot C (Futuriste)</button>
+  <button onclick="resetSim()">♻ Réinitialiser</button>
+</div>
+
+<div id="sim_container">
+  <canvas id="sim" width="800" height="600"></canvas>
+</div>
 
 <script>
-/* ---------- Simple logger ---------- */
-function log(...args){ const s = document.getElementById('log'); s.textContent += args.join(' ') + '\\n'; s.scrollTop = s.scrollHeight; console.log(...args); }
-log("Simulateur autonome démarré - pas de dépendances externes");
+/* -------------------------
+   SIMULATEUR SANS THREE/PHYSIQUE
+   (Compatible téléphones, Render etc.)
+------------------------- */
 
-/* ---------- Minimal WebGL helpers (no Three.js) ----------
-   Renders simple colored cubes (instanced-like) with basic shader.
-   Not physically accurate, but allows visuals + simple move/turn API.
------------------------------------------------------------*/
+const canvas = document.getElementById('sim');
+const ctx = canvas.getContext('2d');
 
-const canvas = document.createElement('canvas');
-canvas.style.width = "100%";
-canvas.style.height = "100%";
-canvas.style.display = "block";
-const container = document.getElementById('sim_container');
-container.appendChild(canvas);
+let robots = [];
+let lastTime = 0;
 
-const gl = canvas.getContext('webgl', { antialias:true });
-if(!gl){ log("WebGL non disponible."); document.getElementById('status').textContent = "WebGL non disponible"; throw new Error("WebGL not available"); }
-
-function resizeCanvas(){
-  const rect = container.getBoundingClientRect();
-  const w = Math.max(1, Math.floor(rect.width));
-  const h = Math.max(1, Math.floor(rect.height));
-  if (canvas.width !== w || canvas.height !== h) {
-    canvas.width = w; canvas.height = h;
-    gl.viewport(0,0,w,h);
-  }
-}
-window.addEventListener('resize', resizeCanvas);
-resizeCanvas();
-
-/* ---------- Shaders (very small) ---------- */
-const vs = `
-attribute vec3 aPos;
-attribute vec3 aColor;
-uniform mat4 uProj;
-uniform mat4 uView;
-uniform mat4 uModel;
-varying vec3 vColor;
-void main(){
-  vColor = aColor;
-  gl_Position = uProj * uView * uModel * vec4(aPos,1.0);
-}
-`;
-const fs = `
-precision mediump float;
-varying vec3 vColor;
-void main(){ gl_FragColor = vec4(vColor,1.0); }
-`;
-
-function createShader(type, src){
-  const s = gl.createShader(type); gl.shaderSource(s,src); gl.compileShader(s);
-  if(!gl.getShaderParameter(s, gl.COMPILE_STATUS)){ const e = gl.getShaderInfoLog(s); log("Shader error:", e); throw new Error(e); }
-  return s;
-}
-function createProgram(vsSrc, fsSrc){
-  const p = gl.createProgram();
-  gl.attachShader(p, createShader(gl.VERTEX_SHADER, vsSrc));
-  gl.attachShader(p, createShader(gl.FRAGMENT_SHADER, fsSrc));
-  gl.linkProgram(p);
-  if(!gl.getProgramParameter(p, gl.LINK_STATUS)){ const e = gl.getProgramInfoLog(p); log("Program link error:", e); throw new Error(e); }
-  return p;
+/* --------- ROBOT B (Wall-E simplifié) --------- */
+function createRobotB(){
+  return {
+    type:"B",
+    x: Math.random()*500+100,
+    y: Math.random()*300+150,
+    angle: 0,
+    size: 40,
+    color:"#ffdd66",
+    wheelsColor:"#444",
+    eyeColor:"#fff"
+  };
 }
 
-const program = createProgram(vs, fs);
-gl.useProgram(program);
-
-/* ---------- Cube geometry ---------- */
-const cubeVerts = new Float32Array([
-  // positions (x,y,z) per face (two triangles)
-  // Front face
-  -0.5,-0.5, 0.5,  0.5,-0.5,0.5,  0.5,0.5,0.5,
-  -0.5,-0.5, 0.5,  0.5,0.5,0.5, -0.5,0.5,0.5,
-  // Back
-  -0.5,-0.5,-0.5, -0.5,0.5,-0.5,  0.5,0.5,-0.5,
-  -0.5,-0.5,-0.5,  0.5,0.5,-0.5,  0.5,-0.5,-0.5,
-  // Left
-  -0.5,-0.5,-0.5, -0.5,-0.5,0.5, -0.5,0.5,0.5,
-  -0.5,-0.5,-0.5, -0.5,0.5,0.5, -0.5,0.5,-0.5,
-  // Right
-   0.5,-0.5,-0.5,  0.5,0.5,-0.5,  0.5,0.5,0.5,
-   0.5,-0.5,-0.5,  0.5,0.5,0.5,  0.5,-0.5,0.5,
-  // Top
-  -0.5,0.5,-0.5, -0.5,0.5,0.5,  0.5,0.5,0.5,
-  -0.5,0.5,-0.5,  0.5,0.5,0.5,  0.5,0.5,-0.5,
-  // Bottom
-  -0.5,-0.5,-0.5,  0.5,-0.5,-0.5,  0.5,-0.5,0.5,
-  -0.5,-0.5,-0.5,  0.5,-0.5,0.5, -0.5,-0.5,0.5
-]);
-
-// colors per vertex (we'll set per-instance color via attribute by repeating color per vertex)
-function repeatColor(rgb){
-  const arr=[];
-  for(let i=0;i<36;i++){ arr.push(rgb[0],rgb[1],rgb[2]); }
-  return new Float32Array(arr);
+/* --------- ROBOT C (Futuriste angulaire) --------- */
+function createRobotC(){
+  return {
+    type:"C",
+    x: Math.random()*500+100,
+    y: Math.random()*300+150,
+    angle: 0,
+    size: 45,
+    color:"#66aaff",
+    neon:"#0ff"
+  };
 }
 
-/* buffers */
-const posBuf = gl.createBuffer();
-gl.bindBuffer(gl.ARRAY_BUFFER, posBuf);
-gl.bufferData(gl.ARRAY_BUFFER, cubeVerts, gl.STATIC_DRAW);
-
-const aPosLoc = gl.getAttribLocation(program, "aPos");
-gl.enableVertexAttribArray(aPosLoc);
-gl.vertexAttribPointer(aPosLoc, 3, gl.FLOAT, false, 0, 0);
-
-/* color buffer - we will update per-draw */
-const colorBuf = gl.createBuffer();
-const aColorLoc = gl.getAttribLocation(program, "aColor");
-gl.enableVertexAttribArray(aColorLoc);
-gl.vertexAttribPointer(aColorLoc, 3, gl.FLOAT, false, 0, 0);
-
-/* uniform locations */
-const uProjLoc = gl.getUniformLocation(program, "uProj");
-const uViewLoc = gl.getUniformLocation(program, "uView");
-const uModelLoc = gl.getUniformLocation(program, "uModel");
-
-/* matrix helpers (simple) */
-function mat4Identity(){ return [1,0,0,0, 0,1,0,0, 0,0,1,0, 0,0,0,1]; }
-function mat4Translate(tx,ty,tz){
-  return [1,0,0,0, 0,1,0,0, 0,0,1,0, tx,ty,tz,1];
+/* --------- AJOUT AU SIMULATEUR --------- */
+function addRobotB(){
+  robots.push(createRobotB());
 }
-function mat4Multiply(a,b){
-  const m = new Array(16).fill(0);
-  for(let i=0;i<4;i++) for(let j=0;j<4;j++) for(let k=0;k<4;k++)
-    m[i*4+j] += a[i*4+k]*b[k*4+j];
-  return m;
-}
-function mat4RotateY(angle){
-  const c=Math.cos(angle), s=Math.sin(angle);
-  return [c,0,s,0, 0,1,0,0, -s,0,c,0, 0,0,0,1];
-}
-function mat4Scale(sx,sy,sz){
-  return [sx,0,0,0, 0,sy,0,0, 0,0,sz,0, 0,0,0,1];
-}
-function perspective(fov, aspect, near, far){
-  const f = 1/Math.tan(fov/2);
-  const nf = 1/(near - far);
-  return [f/aspect,0,0,0, 0,f,0,0, 0,0,(far+near)*nf,-1, 0,0,(2*far*near)*nf,0];
-}
-function lookAt(eye, center, up){
-  const zx = normalize(subtract(eye, center)); // forward
-  const xx = normalize(cross(up, zx));
-  const yy = cross(zx, xx);
-  const tx = -dot(xx, eye), ty=-dot(yy,eye), tz=-dot(zx,eye);
-  return [ xx[0], yy[0], zx[0], 0, xx[1], yy[1], zx[1], 0, xx[2], yy[2], zx[2], 0, tx, ty, tz, 1 ];
-}
-function subtract(a,b){ return [a[0]-b[0], a[1]-b[1], a[2]-b[2]]; }
-function dot(a,b){ return a[0]*b[0]+a[1]*b[1]+a[2]*b[2]; }
-function cross(a,b){ return [ a[1]*b[2]-a[2]*b[1], a[2]*b[0]-a[0]*b[2], a[0]*b[1]-a[1]*b[0] ]; }
-function normalize(v){ const l=Math.hypot(v[0],v[1],v[2])||1; return [v[0]/l,v[1]/l,v[2]/l]; }
-
-/* ---------- camera/proj ---------- */
-let cameraPos = [6,4,6];
-let cameraTarget = [0,0,0];
-function updateCamera(){
-  const proj = perspective(60*Math.PI/180, canvas.width / canvas.height, 0.1, 1000);
-  gl.uniformMatrix4fv(uProjLoc, false, new Float32Array(proj));
-  const view = lookAt(cameraPos, cameraTarget, [0,1,0]);
-  gl.uniformMatrix4fv(uViewLoc, false, new Float32Array(view));
+function addRobotC(){
+  robots.push(createRobotC());
 }
 
-/* ---------- robots state ---------- */
-let robotsState = []; // {id, x,y,z, rot, color}
-let nextId = 0;
-function createRobot(x,y,z, color){
-  const id = nextId++;
-  robotsState.push({id, x, y, z, rot:0, color: color || [Math.random(), Math.random(), Math.random()]});
-  return id;
+function resetSim(){
+  robots = [];
 }
 
-/* add some initial robots */
-createRobot(0,0.5,0, [0.0,0.5,1.0]);
-createRobot(2,0.5,0, [0.9,0.6,0.1]);
-createRobot(-2,0.5,0, [0.6,0.2,0.9]);
-
-/* ---------- robot_api to control robots (exposed globally) ---------- */
+/* --------- API POUR BLOCKLY --------- */
 window.robot_api = {
-  move: function(id, dx, dz){
-    const r = robotsState.find(rr => rr.id === id);
+  move: function(id, dist){
+    const r = robots[id];
     if(!r) return;
-    r.x += (dx||0);
-    r.z += (dz||0);
+
+    r.x += Math.cos(r.angle) * dist;
+    r.y += Math.sin(r.angle) * dist;
   },
-  turn: function(id, dAngle){
-    const r = robotsState.find(rr => rr.id === id);
+  turn: function(id, deg){
+    const r = robots[id];
     if(!r) return;
-    r.rot += dAngle || 0;
-  },
-  list: function(){ return robotsState.map(r=>({id:r.id,x:r.x,y:r.y,z:r.z})); },
-  add: function(x,y,z){ return createRobot(x,y,z); },
-  reset: function(){
-    robotsState = [];
-    nextId = 0;
-    createRobot(0,0.5,0,[0.0,0.5,1.0]);
-    createRobot(2,0.5,0,[0.9,0.6,0.1]);
-    createRobot(-2,0.5,0,[0.6,0.2,0.9]);
+    r.angle += deg * Math.PI/180;
   }
 };
 
-/* expose simple control for UI */
-document.getElementById('btnAdd').onclick = ()=> { const id = window.robot_api.add( (Math.random()-0.5)*4,0.5,(Math.random()-0.5)*4 ); log("robot added id="+id); };
-document.getElementById('btnReset').onclick = ()=> { window.robot_api.reset(); log("reset robots"); };
+/* --------- DESSIN DU ROBOT B --------- */
+function drawRobotB(r){
+  ctx.save();
+  ctx.translate(r.x, r.y);
+  ctx.rotate(r.angle);
 
-/* ---------- render loop ---------- */
-function render(){
-  resizeCanvas();
-  gl.enable(gl.DEPTH_TEST);
-  gl.clearColor(0.06,0.06,0.06,1.0);
-  gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
+  // corps
+  ctx.fillStyle = r.color;
+  ctx.fillRect(-r.size/2, -r.size/2, r.size, r.size);
 
-  updateCamera();
+  // tête
+  ctx.fillStyle = r.color;
+  ctx.fillRect(-r.size/3, -r.size*0.9, r.size*0.66, r.size*0.5);
 
-  // draw each robot
-  robotsState.forEach(r=>{
-    // set color buffer
-    const colors = new Float32Array(repeatColor(r.color));
-    gl.bindBuffer(gl.ARRAY_BUFFER, colorBuf);
-    gl.bufferData(gl.ARRAY_BUFFER, colors, gl.DYNAMIC_DRAW);
-    gl.vertexAttribPointer(aColorLoc, 3, gl.FLOAT, false, 0, 0);
+  // yeux
+  ctx.fillStyle = r.eyeColor;
+  ctx.beginPath();
+  ctx.arc(-10, -r.size*0.7, 6, 0, Math.PI*2);
+  ctx.arc( 10, -r.size*0.7, 6, 0, Math.PI*2);
+  ctx.fill();
 
-    // model matrix: translate * rotateY * scale
-    const t = mat4Translate(r.x, r.y, r.z);
-    const ry = mat4RotateY(r.rot);
-    const s = mat4Scale(1,1,1);
-    const m = mat4Multiply(t, mat4Multiply(ry, s));
-    gl.uniformMatrix4fv(uModelLoc, false, new Float32Array(m));
-    gl.drawArrays(gl.TRIANGLES, 0, 36);
-  });
+  // roues
+  ctx.fillStyle = r.wheelsColor;
+  ctx.fillRect(-r.size/2-6, -r.size/3, 6, r.size*0.66);
+  ctx.fillRect( r.size/2 , -r.size/3, 6, r.size*0.66);
 
-  requestAnimationFrame(render);
+  ctx.restore();
 }
 
-/* start */
-updateCamera();
-requestAnimationFrame(render);
-log("Renderer WebGL démarré — robots visibles sans dépendances externes.");
+/* --------- DESSIN DU ROBOT C --------- */
+function drawRobotC(r){
+  ctx.save();
+  ctx.translate(r.x, r.y);
+  ctx.rotate(r.angle);
+
+  // forme principale triangulaire
+  ctx.fillStyle = r.color;
+  ctx.beginPath();
+  ctx.moveTo(0, -r.size/1.2);
+  ctx.lineTo(-r.size/1.3, r.size/1.2);
+  ctx.lineTo(r.size/1.3, r.size/1.2);
+  ctx.closePath();
+  ctx.fill();
+
+  // LED
+  ctx.fillStyle = r.neon;
+  ctx.fillRect(-8, -r.size*0.2, 16, 6);
+
+  ctx.restore();
+}
+
+/* --------- RENDER LOOP --------- */
+function loop(timestamp){
+  ctx.clearRect(0,0,canvas.width,canvas.height);
+
+  robots.forEach((r, i)=>{
+    if(r.type === "B") drawRobotB(r);
+    if(r.type === "C") drawRobotC(r);
+  });
+
+  requestAnimationFrame(loop);
+}
+requestAnimationFrame(loop);
+
+/* --------- RÉCEPTION DES BLOCS --------- */
+window.addEventListener("message", ev=>{
+  if(ev.data && ev.data.type === "run_code"){
+    try{
+      const AsyncFn = Object.getPrototypeOf(async function(){}).constructor;
+      const fn = new AsyncFn("robot_api", ev.data.code);
+      fn(window.robot_api);
+    }catch(e){
+      console.error(e);
+    }
+  }
+});
 </script>
 </body>
 </html>
