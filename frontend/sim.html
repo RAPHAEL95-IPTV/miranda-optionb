@@ -154,9 +154,9 @@ Blockly.defineBlocksWithJsonArray([
   { type:"turn_right", message0:"tourner à droite de %1°", args0:[{type:"field_number",name:"ANGLE",value:90}], previousStatement:null, nextStatement:null, colour:200 }
 ]);
 
-Blockly.JavaScript['move_forward']=block=>`await robot_api.move(selectedRobotId, ${block.getFieldValue('DIST')});\n`;
-Blockly.JavaScript['turn_left']=block=>`await robot_api.turn(selectedRobotId, -${block.getFieldValue('ANGLE')});\n`;
-Blockly.JavaScript['turn_right']=block=>`await robot_api.turn(selectedRobotId, ${block.getFieldValue('ANGLE')});\n`;
+Blockly.JavaScript['move_forward'] = block => `await robot_api.move(getSelectedRobot(), ${block.getFieldValue('DIST')});\n`;
+Blockly.JavaScript['turn_left'] = block => `await robot_api.turn(getSelectedRobot(), -${block.getFieldValue('ANGLE')});\n`;
+Blockly.JavaScript['turn_right'] = block => `await robot_api.turn(getSelectedRobot(), ${block.getFieldValue('ANGLE')});\n`;
 
 const toolbox=`<xml xmlns="https://developers.google.com/blockly/xml">
   <category name="Déplacement" colour="#4CAF50">
@@ -168,15 +168,17 @@ const toolbox=`<xml xmlns="https://developers.google.com/blockly/xml">
 
 const workspace = Blockly.inject('blocklyDiv',{toolbox:toolbox, trashcan:true});
 
+function getSelectedRobot(){
+  const sel = document.getElementById("robotSelect");
+  return parseInt(sel.value);
+}
+
 async function runBlockly(){
   if(robots.length===0){ alert("Ajoute un robot !"); return; }
-  const sel=document.getElementById("robotSelect");
-  const selectedRobotId=parseInt(sel.value);
-  const code=Blockly.JavaScript.workspaceToCode(workspace);
-  const AsyncFn=Object.getPrototypeOf(async function(){}).constructor;
-  const fullCode=`async function sleep(ms){ return new Promise(r=>setTimeout(r,ms)); } ${code}`;
-  const fn=new AsyncFn("robot_api","selectedRobotId", fullCode);
-  await fn(window.robot_api, selectedRobotId);
+  const code = Blockly.JavaScript.workspaceToCode(workspace);
+  const AsyncFn = Object.getPrototypeOf(async function(){}).constructor;
+  const fn = new AsyncFn("robot_api","getSelectedRobot", code);
+  await fn(window.robot_api, getSelectedRobot);
 }
 
 function updateRobotDropdown(){
