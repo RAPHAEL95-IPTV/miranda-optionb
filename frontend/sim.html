@@ -2,39 +2,33 @@
 <html>
 <head>
   <meta charset="utf-8">
-  <title>Simulateur 3D — Version stable sans CANNON</title>
-  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Simulateur 3D — Diagnostic</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
 
   <style>
-    body { margin:0;background:#111;color:#fff;font-family:Arial }
-    h2 { padding:10px }
+    body { margin:0; background:#222; color:white; font-family:Arial }
     #sim_container {
       width:100%;
       height:600px;
-      background:#000;
+      background:#111;
       position:relative;
-      overflow:hidden;
-    }
-    #sim_container canvas {
-      width:100%!important;
-      height:100%!important;
-      display:block;
+      border:4px solid red; /* DEBUG VISUEL */
     }
     #sim_logs {
       position:absolute;
-      left:8px;
-      top:8px;
+      top:10px;
+      left:10px;
       padding:6px;
-      background:rgba(0,0,0,0.6);
+      background:rgba(0,0,0,0.5);
+      z-index:10;
       font-size:12px;
       border-radius:4px;
-      z-index:10;
     }
   </style>
 </head>
 
 <body>
-  <h2>Simulateur 3D — Stable</h2>
+  <h2>Simulateur 3D — Test complet</h2>
   <div id="sim_container">
     <div id="sim_logs">Initialisation…</div>
   </div>
@@ -42,18 +36,24 @@
   <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r152/three.min.js"></script>
 
   <script>
-    function slog(msg){
-      const box = document.getElementById("sim_logs");
-      box.textContent = msg;
-      console.log(msg);
+    function slog(...msg){
+      console.log(...msg);
+      document.getElementById("sim_logs").textContent = msg.join(" ");
     }
 
-    let scene, camera, renderer, robot;
+    let scene, camera, renderer, cube;
 
     function init(){
-      slog("Chargement THREE.js OK");
-
       const cont = document.getElementById("sim_container");
+
+      // 🔥 DEBUG : Affiche taille container
+      slog("Taille container =", cont.clientWidth, "x", cont.clientHeight);
+
+      if(cont.clientHeight === 0){
+        slog("❌ PROBLÈME : hauteur container = 0 !");
+        return;
+      }
+
       scene = new THREE.Scene();
 
       camera = new THREE.PerspectiveCamera(
@@ -62,46 +62,34 @@
         0.1,
         1000
       );
-      camera.position.set(6,4,6);
+      camera.position.set(3, 3, 3);
       camera.lookAt(0,0,0);
 
       renderer = new THREE.WebGLRenderer({ antialias:true });
       renderer.setSize(cont.clientWidth, cont.clientHeight);
-      renderer.setPixelRatio(window.devicePixelRatio);
-      renderer.setClearColor(0x111111);
-      cont.innerHTML = "";
+      renderer.setClearColor(0x333333);
+
+      // 🔥 DEBUG : Supprime tout puis ajoute canvas
+      cont.innerHTML = '<div id="sim_logs"></div>';
       cont.appendChild(renderer.domElement);
 
-      // LUMIÈRES
-      scene.add(new THREE.AmbientLight(0xffffff, 0.4));
-      const dir = new THREE.DirectionalLight(0xffffff, 0.8);
-      dir.position.set(5,10,5);
-      scene.add(dir);
+      document.getElementById("sim_logs").textContent = "Canvas ajouté ✔";
 
-      // SOL
-      const floor = new THREE.Mesh(
-        new THREE.PlaneGeometry(40,40),
-        new THREE.MeshStandardMaterial({ color:0x333333 })
-      );
-      floor.rotation.x = -Math.PI/2;
-      scene.add(floor);
+      // Test d’objet 3D simple
+      const geo = new THREE.BoxGeometry(1,1,1);
+      const mat = new THREE.MeshBasicMaterial({ color:0xff0000 });
+      cube = new THREE.Mesh(geo, mat);
+      scene.add(cube);
 
-      // ROBOT
-      robot = new THREE.Mesh(
-        new THREE.BoxGeometry(1,1,1),
-        new THREE.MeshStandardMaterial({ color:0x00aaff })
-      );
-      robot.position.set(0,0.5,0);
-      scene.add(robot);
-
-      slog("Simulation prête ✓");
+      slog("Cube créé ✔");
 
       animate();
     }
 
     function animate(){
       requestAnimationFrame(animate);
-      robot.rotation.y += 0.01; // animation simple pour voir quelque chose
+      cube.rotation.y += 0.02;
+      cube.rotation.x += 0.01;
       renderer.render(scene, camera);
     }
 
@@ -112,7 +100,8 @@
       renderer.setSize(cont.clientWidth, cont.clientHeight);
     });
 
-    init();
+    // Lancer init
+    window.onload = init;
   </script>
 </body>
 </html>
