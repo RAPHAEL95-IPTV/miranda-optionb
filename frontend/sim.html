@@ -149,8 +149,6 @@ function drawRobotC(r){
 /* --------------------------
    NAVIGATION STYLE BLENDER
 --------------------------- */
-
-// clic droit = PAN
 canvas.addEventListener("contextmenu", e => e.preventDefault());
 
 canvas.addEventListener("mousedown", e => {
@@ -182,7 +180,6 @@ canvas.addEventListener("mousemove", e => {
   lastMouseY = e.clientY;
 });
 
-// molette = zoom
 canvas.addEventListener("wheel", e => {
   const zoomFactor = 1.1;
   if(e.deltaY < 0) camZoom *= zoomFactor;
@@ -197,7 +194,6 @@ function loop(){
 
   ctx.save();
 
-  // appliquer navigation : zoom + rotation + pan
   ctx.translate(canvas.width/2, canvas.height/2);
   ctx.scale(camZoom, camZoom);
   ctx.rotate(camRot);
@@ -228,6 +224,95 @@ window.addEventListener("message", ev => {
     }
   }
 });
+</script>
+
+<!-- ----------------------------------------------------------
+     AJOUT BLOCS Blockly + BOUTON PLAY (NE MODIFIE RIEN DU CODE EXISTANT)
+----------------------------------------------------------- -->
+
+<!-- Div Blockly -->
+<div id="blocklyDiv" style="height: 400px; width: 400px; float:left; border:1px solid #333; margin:10px"></div>
+
+<!-- Bouton Play -->
+<div style="padding:10px; float:left;">
+  <button onclick="runBlockly()" style="padding:10px 16px; background:#0af; color:#fff; border:none; border-radius:4px; cursor:pointer;">▶ Play Blockly</button>
+</div>
+
+<!-- Blockly libs -->
+<script src="https://unpkg.com/blockly/blockly.min.js"></script>
+<link rel="stylesheet" href="https://unpkg.com/blockly/media/blockly.css">
+
+<script>
+// Initialisation Blockly
+const workspace = Blockly.inject('blocklyDiv', {
+  toolbox: `
+    <xml>
+      <block type="move_forward"></block>
+      <block type="turn_right"></block>
+      <block type="turn_left"></block>
+    </xml>
+  `,
+  trashcan: true
+});
+
+// Définition blocs
+Blockly.defineBlocksWithJsonArray([
+  {
+    "type": "move_forward",
+    "message0": "Avancer de %1 pixels",
+    "args0": [{"type": "field_number", "name": "DIST", "value": 10}],
+    "previousStatement": null,
+    "nextStatement": null,
+    "colour": 120
+  },
+  {
+    "type": "turn_right",
+    "message0": "Tourner à droite de %1 degrés",
+    "args0": [{"type": "field_number", "name": "ANGLE", "value": 90}],
+    "previousStatement": null,
+    "nextStatement": null,
+    "colour": 160
+  },
+  {
+    "type": "turn_left",
+    "message0": "Tourner à gauche de %1 degrés",
+    "args0": [{"type": "field_number", "name": "ANGLE", "value": 90}],
+    "previousStatement": null,
+    "nextStatement": null,
+    "colour": 160
+  }
+]);
+
+// Génération JS depuis Blockly
+Blockly.JavaScript['move_forward'] = function(block) {
+  var value = block.getFieldValue('DIST');
+  return `robot_api.move(selectedRobotId, ${value});\n`;
+};
+Blockly.JavaScript['turn_right'] = function(block) {
+  var value = block.getFieldValue('ANGLE');
+  return `robot_api.turn(selectedRobotId, ${value});\n`;
+};
+Blockly.JavaScript['turn_left'] = function(block) {
+  var value = block.getFieldValue('ANGLE');
+  return `robot_api.turn(selectedRobotId, -${value});\n`;
+};
+
+// Exécution Blockly
+function runBlockly(){
+  if(typeof robots === 'undefined' || robots.length === 0){
+    alert("Ajoutez d'abord un robot !");
+    return;
+  }
+  const code = Blockly.JavaScript.workspaceToCode(workspace);
+  try{
+    const AsyncFn = Object.getPrototypeOf(async function(){}).constructor;
+    const fn = new AsyncFn("robot_api", "selectedRobotId", code);
+    const selectedRobotId = robots.length-1;
+    fn(window.robot_api, selectedRobotId);
+  } catch(e){
+    console.error(e);
+  }
+}
 </script>
 </body>
 </html>
