@@ -72,14 +72,14 @@
 
 <script>
 /* -------------------------------
-   TON SIMULATEUR EXISTANT — INTACT
+   SIMULATEUR EXISTANT — INTACT
 ------------------------------- */
 const canvas = document.getElementById("sim");
 const ctx = canvas.getContext("2d");
 
-let camX = 0, camY = 0, camZoom = 1, camRot = 0;
+let camX=0, camY=0, camZoom=1, camRot=0;
 let isRightDragging=false, isLeftDragging=false, lastMouseX=0, lastMouseY=0;
-let robots = [];
+let robots=[];
 
 function createRobotB(){ return { type:"B", x:Math.random()*500+100, y:Math.random()*300+150, angle:0, size:40, color:"#ffdd66", wheelsColor:"#444", eyeColor:"#fff" }; }
 function createRobotC(){ return { type:"C", x:Math.random()*500+100, y:Math.random()*300+150, angle:0, size:45, color:"#66aaff", neon:"#0ff" }; }
@@ -124,12 +124,7 @@ function drawRobotC(r){
 canvas.addEventListener("contextmenu",e=>e.preventDefault());
 canvas.addEventListener("mousedown",e=>{ if(e.button===2) isRightDragging=true; if(e.button===0) isLeftDragging=true; lastMouseX=e.clientX; lastMouseY=e.clientY; });
 canvas.addEventListener("mouseup",e=>{ if(e.button===2) isRightDragging=false; if(e.button===0) isLeftDragging=false; });
-canvas.addEventListener("mousemove",e=>{
-  const dx=e.clientX-lastMouseX, dy=e.clientY-lastMouseY;
-  if(isRightDragging){ camX+=dx/camZoom; camY+=dy/camZoom; }
-  if(isLeftDragging) camRot+=dx*0.01;
-  lastMouseX=e.clientX; lastMouseY=e.clientY;
-});
+canvas.addEventListener("mousemove",e=>{ const dx=e.clientX-lastMouseX, dy=e.clientY-lastMouseY; if(isRightDragging){ camX+=dx/camZoom; camY+=dy/camZoom; } if(isLeftDragging) camRot+=dx*0.01; lastMouseX=e.clientX; lastMouseY=e.clientY; });
 canvas.addEventListener("wheel",e=>{ if(e.deltaY<0) camZoom*=1.1; else camZoom/=1.1; });
 
 function loop(){
@@ -176,9 +171,11 @@ function getSelectedRobot(){
 async function runBlockly(){
   if(robots.length===0){ alert("Ajoute un robot !"); return; }
   const code = Blockly.JavaScript.workspaceToCode(workspace);
-  const AsyncFn = Object.getPrototypeOf(async function(){}).constructor;
-  const fn = new AsyncFn("robot_api","getSelectedRobot", code);
-  await fn(window.robot_api, getSelectedRobot);
+  try{
+    const AsyncFn = Object.getPrototypeOf(async function(){}).constructor;
+    const fn = new AsyncFn("robot_api","getSelectedRobot", code);
+    await fn(window.robot_api, getSelectedRobot);
+  }catch(e){ console.error("Erreur Blockly:", e); }
 }
 
 function updateRobotDropdown(){
