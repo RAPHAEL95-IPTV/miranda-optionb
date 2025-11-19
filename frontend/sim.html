@@ -30,18 +30,30 @@
 </div>
 
 <script>
-/* -------------------------
-   SIMULATEUR SANS THREE/PHYSIQUE
-   (Compatible téléphones, Render etc.)
-------------------------- */
+/* ------------------------------------------------------------
+   SIMULATEUR 2D + NAVIGATION TYPE BLENDER (PAN / ZOOM / ORBIT)
+   ------------------------------------------------------------ */
 
-const canvas = document.getElementById('sim');
-const ctx = canvas.getContext('2d');
+const canvas = document.getElementById("sim");
+const ctx = canvas.getContext("2d");
 
+// caméra
+let camX = 0;       // déplacement horizontal
+let camY = 0;       // déplacement vertical
+let camZoom = 1;    // zoom
+let camRot = 0;     // rotation globale (vue orbitale)
+
+let isRightDragging = false;
+let isLeftDragging = false;
+let lastMouseX = 0;
+let lastMouseY = 0;
+
+// robots
 let robots = [];
-let lastTime = 0;
 
-/* --------- ROBOT B (Wall-E simplifié) --------- */
+/* --------------------------
+   CREATION DES ROBOTS
+--------------------------- */
 function createRobotB(){
   return {
     type:"B",
@@ -55,7 +67,6 @@ function createRobotB(){
   };
 }
 
-/* --------- ROBOT C (Futuriste angulaire) --------- */
 function createRobotC(){
   return {
     type:"C",
@@ -68,19 +79,13 @@ function createRobotC(){
   };
 }
 
-/* --------- AJOUT AU SIMULATEUR --------- */
-function addRobotB(){
-  robots.push(createRobotB());
-}
-function addRobotC(){
-  robots.push(createRobotC());
-}
+function addRobotB(){ robots.push(createRobotB()); }
+function addRobotC(){ robots.push(createRobotC()); }
+function resetSim(){ robots = []; }
 
-function resetSim(){
-  robots = [];
-}
-
-/* --------- API POUR BLOCKLY --------- */
+/* --------------------------
+   API BLOCKLY
+--------------------------- */
 window.robot_api = {
   move: function(id, dist){
     const r = robots[id];
@@ -96,42 +101,37 @@ window.robot_api = {
   }
 };
 
-/* --------- DESSIN DU ROBOT B --------- */
+/* --------------------------
+   DESSIN DES ROBOTS
+--------------------------- */
 function drawRobotB(r){
   ctx.save();
   ctx.translate(r.x, r.y);
   ctx.rotate(r.angle);
 
-  // corps
   ctx.fillStyle = r.color;
   ctx.fillRect(-r.size/2, -r.size/2, r.size, r.size);
 
-  // tête
-  ctx.fillStyle = r.color;
   ctx.fillRect(-r.size/3, -r.size*0.9, r.size*0.66, r.size*0.5);
 
-  // yeux
   ctx.fillStyle = r.eyeColor;
   ctx.beginPath();
   ctx.arc(-10, -r.size*0.7, 6, 0, Math.PI*2);
-  ctx.arc( 10, -r.size*0.7, 6, 0, Math.PI*2);
+  ctx.arc(10, -r.size*0.7, 6, 0, Math.PI*2);
   ctx.fill();
 
-  // roues
   ctx.fillStyle = r.wheelsColor;
   ctx.fillRect(-r.size/2-6, -r.size/3, 6, r.size*0.66);
-  ctx.fillRect( r.size/2 , -r.size/3, 6, r.size*0.66);
+  ctx.fillRect(r.size/2, -r.size/3, 6, r.size*0.66);
 
   ctx.restore();
 }
 
-/* --------- DESSIN DU ROBOT C --------- */
 function drawRobotC(r){
   ctx.save();
   ctx.translate(r.x, r.y);
   ctx.rotate(r.angle);
 
-  // forme principale triangulaire
   ctx.fillStyle = r.color;
   ctx.beginPath();
   ctx.moveTo(0, -r.size/1.2);
@@ -140,28 +140,84 @@ function drawRobotC(r){
   ctx.closePath();
   ctx.fill();
 
-  // LED
   ctx.fillStyle = r.neon;
   ctx.fillRect(-8, -r.size*0.2, 16, 6);
 
   ctx.restore();
 }
 
-/* --------- RENDER LOOP --------- */
-function loop(timestamp){
+/* --------------------------
+   NAVIGATION STYLE BLENDER
+--------------------------- */
+
+// clic droit = PAN
+canvas.addEventListener("contextmenu", e => e.preventDefault());
+
+canvas.addEventListener("mousedown", e => {
+  if(e.button === 2){ isRightDragging = true; }
+  if(e.button === 0){ isLeftDragging = true; }
+  lastMouseX = e.clientX;
+  lastMouseY = e.clientY;
+});
+
+canvas.addEventListener("mouseup", e => {
+  if(e.button === 2) isRightDragging = false;
+  if(e.button === 0) isLeftDragging = false;
+});
+
+canvas.addEventListener("mousemove", e => {
+  const dx = e.clientX - lastMouseX;
+  const dy = e.clientY - lastMouseY;
+
+  if(isRightDragging){
+    camX += dx / camZoom;
+    camY += dy / camZoom;
+  }
+
+  if(isLeftDragging){
+    camRot += dx * 0.01; // rotation orbitale
+  }
+
+  lastMouseX = e.clientX;
+  lastMouseY = e.clientY;
+});
+
+// molette = zoom
+canvas.addEventListener("wheel", e => {
+  const zoomFactor = 1.1;
+  if(e.deltaY < 0) camZoom *= zoomFactor;
+  else camZoom /= zoomFactor;
+});
+
+/* --------------------------
+   RENDER LOOP
+--------------------------- */
+function loop(){
   ctx.clearRect(0,0,canvas.width,canvas.height);
 
-  robots.forEach((r, i)=>{
-    if(r.type === "B") drawRobotB(r);
-    if(r.type === "C") drawRobotC(r);
+  ctx.save();
+
+  // appliquer navigation : zoom + rotation + pan
+  ctx.translate(canvas.width/2, canvas.height/2);
+  ctx.scale(camZoom, camZoom);
+  ctx.rotate(camRot);
+  ctx.translate(-canvas.width/2 + camX, -canvas.height/2 + camY);
+
+  robots.forEach(r=>{
+    if(r.type==="B") drawRobotB(r);
+    if(r.type==="C") drawRobotC(r);
   });
+
+  ctx.restore();
 
   requestAnimationFrame(loop);
 }
 requestAnimationFrame(loop);
 
-/* --------- RÉCEPTION DES BLOCS --------- */
-window.addEventListener("message", ev=>{
+/* --------------------------
+   Réception du code Blockly
+--------------------------- */
+window.addEventListener("message", ev => {
   if(ev.data && ev.data.type === "run_code"){
     try{
       const AsyncFn = Object.getPrototypeOf(async function(){}).constructor;
