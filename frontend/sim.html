@@ -209,33 +209,12 @@ function loop(){
   requestAnimationFrame(loop);
 }
 requestAnimationFrame(loop);
-
-/* --------------------------
-   Réception du code Blockly
---------------------------- */
-window.addEventListener("message", ev => {
-  if(ev.data && ev.data.type === "run_code"){
-    try{
-      const AsyncFn = Object.getPrototypeOf(async function(){}).constructor;
-      const fn = new AsyncFn("robot_api", ev.data.code);
-      fn(window.robot_api);
-    }catch(e){
-      console.error(e);
-    }
-  }
-});
 </script>
 
-<!-- ----------------------------------------------------------
-     BLOCS Blockly COMPLET + DROPDOWN Robot + PLAY
-     TOUT AJOUTÉ SANS MODIFIER LE SIMULATEUR EXISTANT
------------------------------------------------------------ -->
+<!-- ------------------------- BLOCS Blockly ------------------------- -->
 
 <div style="display:flex; flex-direction:row;">
-  <!-- Div Blockly -->
   <div id="blocklyDiv" style="height:400px; width:400px; border:1px solid #333; margin:10px;"></div>
-
-  <!-- Panel contrôle Blockly -->
   <div style="padding:10px;">
     <label for="robotSelect">Robot à contrôler :</label>
     <select id="robotSelect" style="margin-bottom:10px; display:block; padding:4px;"></select>
@@ -243,56 +222,12 @@ window.addEventListener("message", ev => {
   </div>
 </div>
 
-<!-- Blockly libs -->
 <script src="https://unpkg.com/blockly/blockly.min.js"></script>
 <link rel="stylesheet" href="https://unpkg.com/blockly/media/blockly.css">
 
 <script>
 // -----------------------------------------------------------
-// Gestion du dropdown robot
-// -----------------------------------------------------------
-function updateRobotDropdown(){
-  const sel = document.getElementById("robotSelect");
-  sel.innerHTML = "";
-  robots.forEach((r, i)=>{
-    const opt = document.createElement("option");
-    opt.value = i;
-    opt.text = `${r.type} - ID ${i}`;
-    sel.appendChild(opt);
-  });
-}
-
-// Hook sur ajout robot pour mettre à jour dropdown
-const originalAddRobotB = addRobotB;
-addRobotB = function(){
-  originalAddRobotB();
-  updateRobotDropdown();
-};
-const originalAddRobotC = addRobotC;
-addRobotC = function(){
-  originalAddRobotC();
-  updateRobotDropdown();
-};
-
-// Initialisation dropdown au chargement
-updateRobotDropdown();
-
-// -----------------------------------------------------------
-// Initialisation Blockly
-// -----------------------------------------------------------
-const workspace = Blockly.inject('blocklyDiv', {
-  toolbox: `
-    <xml xmlns="https://developers.google.com/blockly/xml">
-      <block type="move_forward"></block>
-      <block type="turn_right"></block>
-      <block type="turn_left"></block>
-    </xml>
-  `,
-  trashcan: true
-});
-
-// -----------------------------------------------------------
-// Définition des blocs
+// Définition des blocs AVANT injection
 // -----------------------------------------------------------
 Blockly.defineBlocksWithJsonArray([
   {
@@ -322,7 +257,19 @@ Blockly.defineBlocksWithJsonArray([
 ]);
 
 // -----------------------------------------------------------
-// Génération JS depuis Blockly
+// Injection Blockly
+// -----------------------------------------------------------
+const workspace = Blockly.inject('blocklyDiv', {
+  toolbox: `<xml xmlns="https://developers.google.com/blockly/xml">
+              <block type="move_forward"></block>
+              <block type="turn_right"></block>
+              <block type="turn_left"></block>
+            </xml>`,
+  trashcan: true
+});
+
+// -----------------------------------------------------------
+// JS generator pour Blockly
 // -----------------------------------------------------------
 Blockly.JavaScript['move_forward'] = function(block) {
   const value = block.getFieldValue('DIST');
@@ -338,24 +285,38 @@ Blockly.JavaScript['turn_left'] = function(block) {
 };
 
 // -----------------------------------------------------------
+// Dropdown Robot
+// -----------------------------------------------------------
+function updateRobotDropdown(){
+  const sel = document.getElementById("robotSelect");
+  sel.innerHTML = "";
+  robots.forEach((r,i)=>{
+    const opt = document.createElement("option");
+    opt.value = i;
+    opt.text = `${r.type} - ID ${i}`;
+    sel.appendChild(opt);
+  });
+}
+updateRobotDropdown();
+
+const originalAddRobotB = addRobotB;
+addRobotB = function(){ originalAddRobotB(); updateRobotDropdown(); };
+const originalAddRobotC = addRobotC;
+addRobotC = function(){ originalAddRobotC(); updateRobotDropdown(); };
+
+// -----------------------------------------------------------
 // Exécution Blockly
 // -----------------------------------------------------------
 function runBlockly(){
-  if(robots.length === 0){
-    alert("Ajoutez d'abord un robot !");
-    return;
-  }
+  if(robots.length===0){ alert("Ajoutez d'abord un robot !"); return; }
   const sel = document.getElementById("robotSelect");
   const selectedRobotId = parseInt(sel.value);
-
   const code = Blockly.JavaScript.workspaceToCode(workspace);
   try{
     const AsyncFn = Object.getPrototypeOf(async function(){}).constructor;
-    const fn = new AsyncFn("robot_api", "selectedRobotId", code);
+    const fn = new AsyncFn("robot_api","selectedRobotId", code);
     fn(window.robot_api, selectedRobotId);
-  } catch(e){
-    console.error(e);
-  }
+  }catch(e){ console.error(e); }
 }
 </script>
 </body>
