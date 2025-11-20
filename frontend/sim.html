@@ -30,23 +30,24 @@ h2{padding:10px;background:#222;color:#0af;margin:0;border-bottom:2px solid #0af
 <div id="blocklyDiv"></div>
 <button id="runBtn">▶ Exécuter</button>
 
-<!-- Blockly CDN -->
+<!-- Blockly -->
 <script src="https://unpkg.com/blockly/blockly.min.js"></script>
 
 <script>
 // ===========================
-// SIMULATEUR 2D
+// SIMULATEUR 2D ORIGINAL
 // ===========================
-const canvas = document.getElementById("sim");
-const ctx = canvas.getContext("2d");
-let robots = [];
+const canvas=document.getElementById("sim");
+const ctx=canvas.getContext("2d");
+let robots=[];
 
-function createRobot(color){
-  return {x:100+Math.random()*500, y:100+Math.random()*200, angle:0, size:40, color:color};
-}
-function addRobotB(){ robots.push(createRobot("#ffdd66")); updateRobotSelect(); }
-function addRobotC(){ robots.push(createRobot("#66aaff")); updateRobotSelect(); }
+function createRobotB(){ return {x:100+Math.random()*500,y:100+Math.random()*200,angle:0,size:40,color:"#ffdd66"}; }
+function createRobotC(){ return {x:100+Math.random()*500,y:100+Math.random()*200,angle:0,size:45,color:"#66aaff"}; }
+
+function addRobotB(){ robots.push(createRobotB()); updateRobotSelect(); }
+function addRobotC(){ robots.push(createRobotC()); updateRobotSelect(); }
 function resetSim(){ robots=[]; updateRobotSelect(); }
+
 function updateRobotSelect(){
   const sel=document.getElementById("robotSelect");
   sel.innerHTML="";
@@ -58,17 +59,17 @@ function updateRobotSelect(){
   });
 }
 
-// API mouvements
+// API pour Blockly
 window.robot_api = {
   move(id, dist){
-    const r = robots[id]; 
-    if(!r) return; 
-    r.x += Math.cos(r.angle)*dist; 
+    const r = robots[id];
+    if(!r) return;
+    r.x += Math.cos(r.angle)*dist;
     r.y += Math.sin(r.angle)*dist;
   },
   turn(id, deg){
-    const r = robots[id]; 
-    if(!r) return; 
+    const r = robots[id];
+    if(!r) return;
     r.angle += deg*Math.PI/180;
   }
 };
@@ -108,9 +109,9 @@ var workspace = Blockly.inject('blocklyDiv', {
 Blockly.Blocks['move_forward'] = {
   init: function() {
     this.appendDummyInput()
-      .appendField("avancer de")
-      .appendField(new Blockly.FieldNumber(50,1,500),"DIST")
-      .appendField("px");
+        .appendField("avancer de")
+        .appendField(new Blockly.FieldNumber(50,1,500),"DIST")
+        .appendField("px");
     this.setPreviousStatement(true);
     this.setNextStatement(true);
     this.setColour(120);
@@ -125,9 +126,9 @@ Blockly.JavaScript['move_forward'] = function(block){
 Blockly.Blocks['turn_right'] = {
   init: function() {
     this.appendDummyInput()
-      .appendField("tourner de")
-      .appendField(new Blockly.FieldAngle(90),"ANGLE")
-      .appendField("°");
+        .appendField("tourner de")
+        .appendField(new Blockly.FieldAngle(90),"ANGLE")
+        .appendField("°");
     this.setPreviousStatement(true);
     this.setNextStatement(true);
     this.setColour(230);
