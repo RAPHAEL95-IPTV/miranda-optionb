@@ -3,31 +3,28 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Simulateur 3D Robots — B & C (Blockly corrigé)</title>
-
+<title>Simulateur 3D Robots — B & C (Blockly fonctionnel)</title>
 <style>
-  body{margin:0;background:#111;color:#fff;font-family:Arial}
-  h2{margin:0;padding:10px;background:#222;color:#0af;border-bottom:2px solid #0af}
-  #leftPane { width: calc(100% - 440px); float:left; box-sizing:border-box; padding:0; }
-  #rightPane { width:420px; float:right; box-sizing:border-box; padding:10px; height:100vh; }
-  #toolbar{padding:10px;background:#000;border-bottom:1px solid #333}
-  #toolbar button{padding:8px 14px;margin-right:6px;background:#0af;border:none;color:#fff;border-radius:4px;cursor:pointer}
-  #toolbar button:hover{background:#08c}
-  #sim_container{width:100%;height:600px;position:relative;background:#000}
-  canvas{background:#000;display:block;margin:auto}
-  #blocklyDiv{width:100%; height:calc(100vh - 120px); background:#222; border:2px solid #0af; border-radius:8px;}
-  #runBtn{ padding:10px 16px; background:#0f0; color:#000; border:none; border-radius:6px; cursor:pointer; font-weight:bold; margin-top:6px; }
-  #runBtn:hover{ background:#9f9; }
-  #robotSelect{ padding:8px; border-radius:4px; background:#111; color:#fff; border:1px solid #333; width:60%; }
-  .note{ font-size:12px;color:#bbb;margin-top:8px }
+body{margin:0;background:#111;color:#fff;font-family:Arial}
+h2{margin:0;padding:10px;background:#222;color:#0af;border-bottom:2px solid #0af}
+#leftPane { width: calc(100% - 440px); float:left; box-sizing:border-box; padding:0; }
+#rightPane { width:420px; float:right; box-sizing:border-box; padding:10px; height:100vh; }
+#toolbar{padding:10px;background:#000;border-bottom:1px solid #333}
+#toolbar button{padding:8px 14px;margin-right:6px;background:#0af;border:none;color:#fff;border-radius:4px;cursor:pointer}
+#toolbar button:hover{background:#08c}
+#sim_container{width:100%;height:600px;position:relative;background:#000}
+canvas{background:#000;display:block;margin:auto}
+#blocklyDiv{width:100%; height:calc(100vh - 120px); background:#222; border:2px solid #0af; border-radius:8px;}
+#controls { margin-top:8px; display:flex; gap:8px; align-items:center; justify-content:space-between; }
+#robotSelect{ padding:8px; border-radius:4px; background:#111; color:#fff; border:1px solid #333; width:60%; }
+#runBtn{ padding:10px 16px; background:#0f0; color:#000; border:none; border-radius:6px; cursor:pointer; font-weight:bold; }
+#runBtn:hover{ background:#9f9; }
+.note{ font-size:12px;color:#bbb;margin-top:8px }
 </style>
-
 <script src="https://unpkg.com/blockly/blockly.min.js"></script>
-<link rel="stylesheet" href="https://unpkg.com/blockly/media/blockly.css">
 </head>
-
 <body>
-<h2 style="padding-left:10px">Simulateur 3D — Robots B & C (Blockly corrigé)</h2>
+<h2 style="padding-left:10px">Simulateur 3D — Robots B & C (Blockly intégré)</h2>
 
 <div id="leftPane">
   <div id="toolbar">
@@ -35,7 +32,6 @@
     <button id="btnAddC">➕ Ajouter Robot C (Futuriste)</button>
     <button id="btnReset">♻ Réinitialiser</button>
   </div>
-
   <div id="sim_container">
     <canvas id="sim" width="800" height="600"></canvas>
   </div>
@@ -51,155 +47,81 @@
       <button id="runBtn">▶ PLAY</button>
     </div>
   </div>
-
   <div id="blocklyDiv" aria-label="Éditeur Blockly"></div>
   <div class="note">Ajoute un robot puis choisis-le dans la liste avant d’exécuter.</div>
 </div>
 
 <script>
-/* ==========================
-   PARTIE 1 — SIMULATEUR
-========================== */
-
+/* ========== SIMULATEUR 2D EXISTANT ========== */
 const canvas = document.getElementById('sim');
 const ctx = canvas.getContext('2d');
-
-let camX = 0, camY = 0, camZoom = 1, camRot = 0;
+let camX=0, camY=0, camZoom=1, camRot=0;
 let isRightDragging=false, isLeftDragging=false, lastMouseX=0, lastMouseY=0;
+let robots = [];
+let animations=[];
 
-let robots = []; // tableau des robots
-
-function createRobotB(){
-  return { type:"B", x:Math.random()*500+100, y:Math.random()*300+150, angle:0, size:40, color:"#ffdd66", wheelsColor:"#444", eyeColor:"#fff" };
-}
-function createRobotC(){
-  return { type:"C", x:Math.random()*500+100, y:Math.random()*300+150, angle:0, size:45, color:"#66aaff", neon:"#0ff" };
-}
-
+function createRobotB(){ return {type:"B", x:200, y:200, angle:0, size:40, color:"#ffdd66", wheelsColor:"#444", eyeColor:"#fff"}; }
+function createRobotC(){ return {type:"C", x:300, y:300, angle:0, size:45, color:"#66aaff", neon:"#0ff"}; }
 function addRobotB(){ robots.push(createRobotB()); updateRobotDropdown(); }
 function addRobotC(){ robots.push(createRobotC()); updateRobotDropdown(); }
 function resetSim(){ robots=[]; updateRobotDropdown(); }
 
-/* Dessin */
 function drawRobotB(r){
-  ctx.save();
-  ctx.translate(r.x,r.y);
-  ctx.rotate(r.angle);
-  ctx.fillStyle=r.color;
-  ctx.fillRect(-r.size/2,-r.size/2,r.size,r.size);
+  ctx.save(); ctx.translate(r.x,r.y); ctx.rotate(r.angle);
+  ctx.fillStyle=r.color; ctx.fillRect(-r.size/2,-r.size/2,r.size,r.size);
   ctx.fillRect(-r.size/3,-r.size*0.9,r.size*0.66,r.size*0.5);
-  ctx.fillStyle=r.eyeColor;
-  ctx.beginPath();
-  ctx.arc(-10,-r.size*0.7,6,0,Math.PI*2);
-  ctx.arc(10,-r.size*0.7,6,0,Math.PI*2);
-  ctx.fill();
-  ctx.fillStyle=r.wheelsColor;
-  ctx.fillRect(-r.size/2-6,-r.size/3,6,r.size*0.66);
-  ctx.fillRect(r.size/2,-r.size/3,6,r.size*0.66);
+  ctx.fillStyle=r.eyeColor; ctx.beginPath(); ctx.arc(-10,-r.size*0.7,6,0,Math.PI*2); ctx.arc(10,-r.size*0.7,6,0,Math.PI*2); ctx.fill();
+  ctx.fillStyle=r.wheelsColor; ctx.fillRect(-r.size/2-6,-r.size/3,6,r.size*0.66); ctx.fillRect(r.size/2,-r.size/3,6,r.size*0.66);
   ctx.restore();
 }
-
 function drawRobotC(r){
-  ctx.save();
-  ctx.translate(r.x,r.y);
-  ctx.rotate(r.angle);
-  ctx.fillStyle=r.color;
-  ctx.beginPath();
-  ctx.moveTo(0,-r.size/1.2);
-  ctx.lineTo(-r.size/1.3,r.size/1.2);
-  ctx.lineTo(r.size/1.3,r.size/1.2);
-  ctx.closePath();
-  ctx.fill();
-  ctx.fillStyle=r.neon;
-  ctx.fillRect(-8,-r.size*0.2,16,6);
-  ctx.restore();
+  ctx.save(); ctx.translate(r.x,r.y); ctx.rotate(r.angle);
+  ctx.fillStyle=r.color; ctx.beginPath(); ctx.moveTo(0,-r.size/1.2); ctx.lineTo(-r.size/1.3,r.size/1.2); ctx.lineTo(r.size/1.3,r.size/1.2); ctx.closePath(); ctx.fill();
+  ctx.fillStyle=r.neon; ctx.fillRect(-8,-r.size*0.2,16,6); ctx.restore();
 }
-
-/* NAVIGATION */
-canvas.addEventListener('contextmenu', e=>e.preventDefault());
-canvas.addEventListener('mousedown', e=>{
-  if(e.button===2) isRightDragging=true;
-  if(e.button===0) isLeftDragging=true;
-  lastMouseX=e.clientX; lastMouseY=e.clientY;
-});
-canvas.addEventListener('mouseup', e=>{
-  if(e.button===2) isRightDragging=false;
-  if(e.button===0) isLeftDragging=false;
-});
-canvas.addEventListener('mousemove', e=>{
-  const dx=e.clientX-lastMouseX, dy=e.clientY-lastMouseY;
-  if(isRightDragging){ camX+=dx/camZoom; camY+=dy/camZoom; }
-  if(isLeftDragging){ camRot+=dx*0.01; }
-  lastMouseX=e.clientX; lastMouseY=e.clientY;
-});
-canvas.addEventListener('wheel', e=>{ camZoom*= e.deltaY<0?1.1:0.9; });
 
 /* ANIMATIONS */
-let animations = [];
-
-function pushMoveAnimation(id, dist){
-  const r = robots[id]; if(!r) return;
-  r.x += Math.cos(r.angle)*dist; r.y += Math.sin(r.angle)*dist;
-}
-function pushTurnAnimation(id, deg){
-  const r = robots[id]; if(!r) return;
-  r.angle += deg*Math.PI/180;
-}
+function pushMoveAnimation(id,dist){ const r=robots[id]; if(!r) return; const steps=30; const dx=Math.cos(r.angle)*(dist/steps); const dy=Math.sin(r.angle)*(dist/steps); animations.push({type:'move',id,stepsLeft:steps,dx,dy}); }
+function pushTurnAnimation(id,deg){ const r=robots[id]; if(!r) return; const steps=20; const da=(deg*Math.PI/180)/20; animations.push({type:'turn',id,stepsLeft:20,da}); }
 
 function loop(){
+  animations.forEach((a,i)=>{ const r=robots[a.id]; if(!r){ animations.splice(i,1); return; }
+    if(a.type==='move'){ r.x+=a.dx; r.y+=a.dy; a.stepsLeft--; }
+    else if(a.type==='turn'){ r.angle+=a.da; a.stepsLeft--; }
+    if(a.stepsLeft<=0) animations.splice(i,1);
+  });
   ctx.clearRect(0,0,canvas.width,canvas.height);
-  ctx.save();
-  ctx.translate(canvas.width/2, canvas.height/2);
-  ctx.scale(camZoom, camZoom);
-  ctx.rotate(camRot);
-  ctx.translate(-canvas.width/2+camX, -canvas.height/2+camY);
-  robots.forEach(r=>{ if(r.type==="B") drawRobotB(r); if(r.type==="C") drawRobotC(r); });
+  ctx.save(); ctx.translate(canvas.width/2,canvas.height/2); ctx.scale(camZoom,camZoom); ctx.rotate(camRot); ctx.translate(-canvas.width/2+camX,-canvas.height/2+camY);
+  robots.forEach(r=>{ if(r.type==='B') drawRobotB(r); else drawRobotC(r); });
   ctx.restore();
   requestAnimationFrame(loop);
 }
 requestAnimationFrame(loop);
 
-/* ==========================
-   PARTIE 2 — BLOCKLY
-========================== */
+/* ========== DROPDOWN ROBOT ========== */
+function updateRobotDropdown(){ const sel=document.getElementById('robotSelect'); sel.innerHTML=''; robots.forEach((r,i)=>{ const opt=document.createElement('option'); opt.value=i; opt.text=`Robot ${i}`; sel.appendChild(opt); }); if(robots.length>0) sel.selectedIndex=0; }
+function getSelectedRobot(){ const sel=document.getElementById('robotSelect'); return sel.selectedIndex>=0 ? parseInt(sel.value) : 0; }
 
-function updateRobotDropdown(){
-  const sel = document.getElementById('robotSelect'); sel.innerHTML='';
-  robots.forEach((r,i)=>{ const opt=document.createElement('option'); opt.value=i; opt.text=`Robot ${i}`; sel.appendChild(opt); });
-  if(robots.length>0 && sel.selectedIndex===-1) sel.selectedIndex=0;
-}
-function getSelectedRobot(){ const sel=document.getElementById('robotSelect'); return robots.length===0?0:parseInt(sel.value)||0; }
+/* ========== HOOK BOUTONS ========== */
+document.getElementById('btnAddB').addEventListener('click', addRobotB);
+document.getElementById('btnAddC').addEventListener('click', addRobotC);
+document.getElementById('btnReset').addEventListener('click', resetSim);
 
-/* Définition blocs */
+/* ========== BLOCKLY ========== */
 Blockly.defineBlocksWithJsonArray([
-  {"type":"move_forward","message0":"Avancer de %1 px","args0":[{"type":"field_number","name":"DIST","value":50}],"previousStatement":null,"nextStatement":null,"colour":120},
-  {"type":"turn_left","message0":"Tourner à gauche de %1°","args0":[{"type":"field_number","name":"ANGLE","value":90}],"previousStatement":null,"nextStatement":null,"colour":200},
-  {"type":"turn_right","message0":"Tourner à droite de %1°","args0":[{"type":"field_number","name":"ANGLE","value":90}],"previousStatement":null,"nextStatement":null,"colour":200}
+  {"type":"move_forward","message0":"Avancer %1 px","args0":[{"type":"field_number","name":"DIST","value":50}],"previousStatement":null,"nextStatement":null,"colour":120},
+  {"type":"turn_left","message0":"Tourner à gauche %1°","args0":[{"type":"field_number","name":"ANGLE","value":90}],"previousStatement":null,"nextStatement":null,"colour":200},
+  {"type":"turn_right","message0":"Tourner à droite %1°","args0":[{"type":"field_number","name":"ANGLE","value":90}],"previousStatement":null,"nextStatement":null,"colour":200}
 ]);
 
-Blockly.JavaScript['move_forward']=function(block){ return `pushMoveAnimation(${getSelectedRobot()}, ${Number(block.getFieldValue('DIST'))});\n`; };
-Blockly.JavaScript['turn_left']=function(block){ return `pushTurnAnimation(${getSelectedRobot()}, ${-Number(block.getFieldValue('ANGLE'))});\n`; };
-Blockly.JavaScript['turn_right']=function(block){ return `pushTurnAnimation(${getSelectedRobot()}, ${Number(block.getFieldValue('ANGLE'))});\n`; };
+Blockly.JavaScript['move_forward'] = b => `pushMoveAnimation(${getSelectedRobot()},${b.getFieldValue('DIST')});\n`;
+Blockly.JavaScript['turn_left'] = b => `pushTurnAnimation(${getSelectedRobot()},-${b.getFieldValue('ANGLE')});\n`;
+Blockly.JavaScript['turn_right'] = b => `pushTurnAnimation(${getSelectedRobot()},${b.getFieldValue('ANGLE')});\n`;
 
-const toolbox = `
-<xml xmlns="https://developers.google.com/blockly/xml">
-  <category name="Déplacement" colour="#4CAF50">
-    <block type="move_forward"></block>
-    <block type="turn_left"></block>
-    <block type="turn_right"></block>
-  </category>
-</xml>`;
-const workspace = Blockly.inject('blocklyDiv',{toolbox:toolbox,trashcan:true});
+const workspace = Blockly.inject('blocklyDiv',{toolbox:`<xml xmlns="https://developers.google.com/blockly/xml"><category name="Déplacement" colour="#4CAF50"><block type="move_forward"></block><block type="turn_left"></block><block type="turn_right"></block></category></xml>`, trashcan:true});
 
-/* PLAY */
-document.getElementById('runBtn').addEventListener('click', ()=>{
-  if(robots.length===0){ alert("Ajoute d'abord un robot."); return; }
-  updateRobotDropdown();
-  try{ eval(Blockly.JavaScript.workspaceToCode(workspace)); }catch(e){ console.error(e); alert("Erreur Blockly: voir console"); }
-});
+document.getElementById('runBtn').addEventListener('click',()=>{ try{ eval(Blockly.JavaScript.workspaceToCode(workspace)); }catch(e){ console.error(e); alert("Erreur Blockly"); } });
 
-/* Initial dropdown update */
-updateRobotDropdown();
 </script>
 </body>
 </html>
