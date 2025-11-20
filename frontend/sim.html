@@ -30,16 +30,16 @@ h2{padding:10px;background:#222;color:#0af;margin:0;border-bottom:2px solid #0af
 <div id="blocklyDiv"></div>
 <button id="runBtn">▶ Exécuter</button>
 
-<!-- Blockly intégré via CDN simplifié pour test -->
+<!-- Blockly CDN -->
 <script src="https://unpkg.com/blockly/blockly.min.js"></script>
 
 <script>
 // ===========================
 // SIMULATEUR 2D
 // ===========================
-const canvas=document.getElementById("sim");
-const ctx=canvas.getContext("2d");
-let robots=[];
+const canvas = document.getElementById("sim");
+const ctx = canvas.getContext("2d");
+let robots = [];
 
 function createRobot(color){
   return {x:100+Math.random()*500, y:100+Math.random()*200, angle:0, size:40, color:color};
