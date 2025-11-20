@@ -1,183 +1,112 @@
-<!doctype html>
+<!DOCTYPE html>
 <html>
 <head>
 <meta charset="utf-8">
-<title>Sim 2D + Blockly + Sélecteur de robot</title>
-
+<title>Simulateur 2D Robots + Blockly</title>
 <style>
-  body{margin:0;background:#111;color:white;font-family:Arial}
-  h2{padding:10px;background:#222;color:#0af;margin:0;border-bottom:2px solid #0af}
-  #toolbar{padding:10px;background:#000;border-bottom:1px solid #333}
-  #toolbar button{padding:8px 14px;margin-right:6px;background:#0af;border:none;color:#fff;border-radius:4px;cursor:pointer}
-  #toolbar button:hover{background:#08c}
-  #sim{background:#000;display:block;margin:auto}
-  #blocklyDiv{height:300px;width:100%;background:#222;border-top:2px solid #0af;}
-  #runBtn{margin:10px;padding:10px 20px;background:#0af;border:none;color:#fff;cursor:pointer;border-radius:5px;}
-  #robotSelect{margin-left:10px;padding:5px}
+body{margin:0;font-family:Arial;background:#111;color:#fff}
+h2{padding:10px;background:#222;color:#0af;margin:0;border-bottom:2px solid #0af}
+#toolbar{padding:10px;background:#000;border-bottom:1px solid #333}
+#toolbar button{padding:8px 14px;margin-right:6px;background:#0af;border:none;color:#fff;border-radius:4px;cursor:pointer}
+#toolbar button:hover{background:#08c}
+#sim{background:#000;display:block;margin:auto;width:800px;height:400px}
+#blocklyDiv{height:300px;width:100%;background:#222;border-top:2px solid #0af}
+#runBtn{margin:10px;padding:10px 20px;background:#0af;border:none;color:#fff;cursor:pointer;border-radius:5px}
+#robotSelect{margin-left:10px;padding:5px}
 </style>
 </head>
-
 <body>
-<h2>Simulateur 2D + Blockly Fonctionnel</h2>
+<h2>Simulateur 2D Robots + Blockly</h2>
 
 <div id="toolbar">
   <button onclick="addRobotB()">➕ Robot B</button>
   <button onclick="addRobotC()">➕ Robot C</button>
-
-  <select id="robotSelect">
-    <option value="0">Robot 0</option>
-  </select>
-
+  <select id="robotSelect"><option value="0">Robot 0</option></select>
   <button onclick="resetSim()">♻ Réinitialiser</button>
 </div>
 
 <canvas id="sim" width="800" height="400"></canvas>
-
 <div id="blocklyDiv"></div>
 <button id="runBtn">▶ Exécuter</button>
 
+<!-- Blockly intégré en interne -->
 <script src="https://unpkg.com/blockly/blockly.min.js"></script>
-
 <script>
 // ===========================
-//     SIMULATEUR 2D
+// SIMULATEUR 2D
 // ===========================
-const canvas = document.getElementById("sim");
-const ctx = canvas.getContext("2d");
+const canvas=document.getElementById("sim");
+const ctx=canvas.getContext("2d");
+let robots=[];
 
-let robots = [];
+function createRobot(color){return {x:100+Math.random()*500,y:100+Math.random()*200,angle:0,size:40,color:color};}
+function addRobotB(){robots.push(createRobot("#ffdd66")); updateRobotSelect();}
+function addRobotC(){robots.push(createRobot("#66aaff")); updateRobotSelect();}
+function updateRobotSelect(){const sel=document.getElementById("robotSelect"); sel.innerHTML=""; robots.forEach((r,i)=>{let opt=document.createElement("option"); opt.value=i; opt.textContent="Robot "+i; sel.appendChild(opt);});}
+function resetSim(){robots=[]; updateRobotSelect();}
 
-// --- Création robots ---
-function createRobot(color){
-  return {
-    x:100 + Math.random()*500,
-    y:100 + Math.random()*200,
-    angle:0,
-    size:40,
-    color:color
-  };
-}
-
-function addRobotB(){
-  robots.push(createRobot("#ffdd66"));
-  updateRobotSelect();
-}
-
-function addRobotC(){
-  robots.push(createRobot("#66aaff"));
-  updateRobotSelect();
-}
-
-function updateRobotSelect(){
-  const sel = document.getElementById("robotSelect");
-  sel.innerHTML = "";
-  robots.forEach((r, i)=>{
-    let opt = document.createElement("option");
-    opt.value = i;
-    opt.textContent = "Robot " + i;
-    sel.appendChild(opt);
-  });
-}
-
-function resetSim(){
-  robots = [];
-  updateRobotSelect();
-}
-
-// --- Mouvements API ---
-window.robot_api = {
-  move(id, dist){
-    const r = robots[id];
-    if(!r) return;
-    r.x += Math.cos(r.angle) * dist;
-    r.y += Math.sin(r.angle) * dist;
-  },
-  turn(id, deg){
-    const r = robots[id];
-    if(!r) return;
-    r.angle += deg * Math.PI / 180;
-  }
+// API mouvements
+window.robot_api={
+  move(id,dist){const r=robots[id]; if(!r) return; r.x+=Math.cos(r.angle)*dist; r.y+=Math.sin(r.angle)*dist;},
+  turn(id,deg){const r=robots[id]; if(!r) return; r.angle+=deg*Math.PI/180;}
 };
 
-// --- Dessin robots ---
-function drawRobot(r){
-  ctx.save();
-  ctx.translate(r.x, r.y);
-  ctx.rotate(r.angle);
-
-  ctx.fillStyle = r.color;
-  ctx.fillRect(-r.size/2, -r.size/2, r.size, r.size);
-
-  ctx.restore();
-}
-
-function loop(){
-  ctx.clearRect(0,0,canvas.width,canvas.height);
-  robots.forEach(drawRobot);
-  requestAnimationFrame(loop);
-}
+// Dessin robots
+function drawRobot(r){ctx.save(); ctx.translate(r.x,r.y); ctx.rotate(r.angle); ctx.fillStyle=r.color; ctx.fillRect(-r.size/2,-r.size/2,r.size,r.size); ctx.restore();}
+function loop(){ctx.clearRect(0,0,canvas.width,canvas.height); robots.forEach(drawRobot); requestAnimationFrame(loop);}
 loop();
 
-
 // ===========================
-//        BLOCKLY
+// BLOCKLY
 // ===========================
-const toolbox = {
-  "kind":"flyoutToolbox",
-  "contents":[
-    {"kind":"block","type":"move_forward"},
-    {"kind":"block","type":"turn_right"}
-  ]
-};
-
-const workspace = Blockly.inject('blocklyDiv', {toolbox: toolbox});
-
-// --- Bloc avancer ---
-Blockly.Blocks['move_forward'] = {
-  init: function(){
-    this.appendDummyInput()
-        .appendField("avancer de")
-        .appendField(new Blockly.FieldNumber(50, 1, 500), "DIST")
-        .appendField("px");
-    this.setPreviousStatement(true);
-    this.setNextStatement(true);
-    this.setColour(120);
+var workspace=Blockly.inject('blocklyDiv',{
+  toolbox: {
+    kind:"flyoutToolbox",
+    contents:[
+      {kind:"block",type:"move_forward"},
+      {kind:"block",type:"turn_right"},
+      {kind:"block",type:"controls_repeat_ext"}
+    ]
   }
+});
+
+// Bloc avancer
+Blockly.Blocks['move_forward']={init:function(){
+  this.appendDummyInput().appendField("avancer de")
+      .appendField(new Blockly.FieldNumber(50,1,500),"DIST").appendField("px");
+  this.setPreviousStatement(true);
+  this.setNextStatement(true);
+  this.setColour(120);
+}};
+Blockly.JavaScript['move_forward']=function(block){
+  const dist=block.getFieldValue('DIST');
+  const id=document.getElementById("robotSelect").value;
+  return `robot_api.move(${id},${dist});\n`;
 };
 
-Blockly.JavaScript['move_forward'] = function(block){
-  const dist = block.getFieldValue('DIST');
-  const id = document.getElementById("robotSelect").value;
-  return `robot_api.move(${id}, ${dist});\n`;
+// Bloc tourner
+Blockly.Blocks['turn_right']={init:function(){
+  this.appendDummyInput().appendField("tourner de")
+      .appendField(new Blockly.FieldAngle(90),"ANGLE").appendField("°");
+  this.setPreviousStatement(true);
+  this.setNextStatement(true);
+  this.setColour(230);
+}};
+Blockly.JavaScript['turn_right']=function(block){
+  const deg=block.getFieldValue('ANGLE');
+  const id=document.getElementById("robotSelect").value;
+  return `robot_api.turn(${id},${deg});\n`;
 };
 
-// --- Bloc tourner ---
-Blockly.Blocks['turn_right'] = {
-  init: function(){
-    this.appendDummyInput()
-        .appendField("tourner de")
-        .appendField(new Blockly.FieldAngle(90), "ANGLE")
-        .appendField("°");
-    this.setPreviousStatement(true);
-    this.setNextStatement(true);
-    this.setColour(230);
-  }
+// Bouton exécuter
+document.getElementById("runBtn").onclick=()=>{
+  try{
+    const code=Blockly.JavaScript.workspaceToCode(workspace);
+    const AsyncFn=Object.getPrototypeOf(async function(){}).constructor;
+    const fn=new AsyncFn("robot_api",code);
+    fn(robot_api);
+  }catch(e){console.error(e);}
 };
-
-Blockly.JavaScript['turn_right'] = function(block){
-  const deg = block.getFieldValue('ANGLE');
-  const id = document.getElementById("robotSelect").value;
-  return `robot_api.turn(${id}, ${deg});\n`;
-};
-
-// ►► EXÉCUTER
-document.getElementById("runBtn").onclick = () => {
-  const code = Blockly.JavaScript.workspaceToCode(workspace);
-  const AsyncFn = Object.getPrototypeOf(async function(){}).constructor;
-  const fn = new AsyncFn("robot_api", code);
-  fn(robot_api);
-};
-
 </script>
 </body>
 </html>
