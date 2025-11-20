@@ -3,173 +3,355 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Simulateur 3D Robots — B & C</title>
+<title>Simulateur 3D Robots — B & C (avec Blockly)</title>
 
 <style>
-body{margin:0;background:#111;color:#fff;font-family:Arial}
-h2{margin:0;padding:10px;background:#222;color:#0af;border-bottom:2px solid #0af}
-#toolbar{padding:10px;background:#000;border-bottom:1px solid #333}
-#toolbar button{padding:8px 14px;margin-right:6px;background:#0af;border:none;color:#fff;border-radius:4px;cursor:pointer}
-#toolbar button:hover{background:#08c}
-#sim_container{width:100%;height:600px;position:relative;background:#000}
-canvas{background:#000;display:block;margin:auto}
+  body{margin:0;background:#111;color:#fff;font-family:Arial}
+  h2{margin:0;padding:10px;background:#222;color:#0af;border-bottom:2px solid #0af}
+  #toolbar{padding:10px;background:#000;border-bottom:1px solid #333}
+  #toolbar button{padding:8px 14px;margin-right:6px;background:#0af;border:none;color:#fff;border-radius:4px;cursor:pointer}
+  #toolbar button:hover{background:#08c}
 
-/* Blockly */
-#blocklyDiv{
-  position:fixed;
-  top:70px; right:10px;
-  width:420px; height:580px;
-  background:#222;
-  border:2px solid #0af;
-  border-radius:8px;
-}
-#runBtn{
-  position:fixed; top:10px; right:10px;
-  background:#0f0; padding:10px 16px;
-  border:none; border-radius:6px; color:#000;
-  cursor:pointer; font-weight:bold; font-size:16px;
-}
-#runBtn:hover{background:#9f9;}
-#robotSelect{
-  position:fixed; top:10px; right:130px; padding:8px; border-radius:4px;
-}
+  /* Left area: simulator */
+  #leftPane { width: calc(100% - 440px); float:left; box-sizing:border-box; }
+  #sim_container{width:100%;height:600px;position:relative;background:#000}
+  canvas{background:#000;display:block;margin:auto}
+
+  /* Right area: Blockly */
+  #rightPane { width:420px; float:right; box-sizing:border-box; padding:10px; }
+  #blocklyDiv{
+    width:100%; height:540px; background:#222; border:2px solid #0af; border-radius:8px;
+  }
+  #controls { margin-top:8px; display:flex; gap:8px; align-items:center; }
+  #robotSelect{ padding:8px; border-radius:4px; background:#111; color:#fff; border:1px solid #333; }
+  #runBtn{ padding:10px 16px; background:#0f0; color:#000; border:none; border-radius:6px; cursor:pointer; font-weight:bold; }
+  #runBtn:hover{ background:#9f9; }
 </style>
 
+<!-- Blockly -->
 <script src="https://unpkg.com/blockly/blockly.min.js"></script>
-
+<link rel="stylesheet" href="https://unpkg.com/blockly/media/blockly.css">
 </head>
 <body>
 
 <h2>Simulateur 3D — Robots B & C</h2>
 
-<div id="toolbar">
-  <button onclick="addRobotB()">➕ Ajouter Robot B (Wall-E)</button>
-  <button onclick="addRobotC()">➕ Ajouter Robot C (Futuriste)</button>
-  <button onclick="resetSim()">♻ Réinitialiser</button>
+<div id="leftPane">
+  <div id="toolbar">
+    <button id="btnAddB">➕ Ajouter Robot B (Wall-E)</button>
+    <button id="btnAddC">➕ Ajouter Robot C (Futuriste)</button>
+    <button id="btnReset">♻ Réinitialiser</button>
+  </div>
+
+  <div id="sim_container">
+    <canvas id="sim" width="800" height="600"></canvas>
+  </div>
 </div>
 
-<select id="robotSelect"></select>
-<button id="runBtn" onclick="runBlockly()">▶ PLAY</button>
+<div id="rightPane">
+  <div style="display:flex; align-items:center; justify-content:space-between;">
+    <div>
+      <label style="font-size:13px;color:#ddd">Robot à contrôler</label><br>
+      <select id="robotSelect" style="width:240px;"></select>
+    </div>
+    <div>
+      <button id="runBtn">▶ PLAY</button>
+    </div>
+  </div>
 
-<div id="sim_container">
-  <canvas id="sim" width="800" height="600"></canvas>
+  <div id="blocklyDiv" aria-label="Éditeur Blockly"></div>
 </div>
-
-<div id="blocklyDiv"></div>
 
 <script>
-/* -------------------------------
-   SIMULATEUR EXISTANT — INTACT
-------------------------------- */
+/* ------------------------------------------------------------------------
+   PARTIE 1 : simulateur original (inchangé) — je le laisse tel quel ici
+   ------------------------------------------------------------------------ */
+
 const canvas = document.getElementById("sim");
 const ctx = canvas.getContext("2d");
 
-let camX=0, camY=0, camZoom=1, camRot=0;
+// caméra / navigation
+let camX = 0, camY = 0, camZoom = 1, camRot = 0;
 let isRightDragging=false, isLeftDragging=false, lastMouseX=0, lastMouseY=0;
-let robots=[];
 
-function createRobotB(){ return { type:"B", x:Math.random()*500+100, y:Math.random()*300+150, angle:0, size:40, color:"#ffdd66", wheelsColor:"#444", eyeColor:"#fff" }; }
-function createRobotC(){ return { type:"C", x:Math.random()*500+100, y:Math.random()*300+150, angle:0, size:45, color:"#66aaff", neon:"#0ff" }; }
+// robots array
+let robots = [];
 
-function addRobotB(){ robots.push(createRobotB()); updateRobotDropdown(); }
-function addRobotC(){ robots.push(createRobotC()); updateRobotDropdown(); }
-function resetSim(){ robots=[]; updateRobotDropdown(); }
+/* création robots (identique à ton code d'origine) */
+function createRobotB(){
+  return {
+    type:"B",
+    x: Math.random()*500+100,
+    y: Math.random()*300+150,
+    angle: 0,
+    size: 40,
+    color:"#ffdd66",
+    wheelsColor:"#444",
+    eyeColor:"#fff"
+  };
+}
+function createRobotC(){
+  return {
+    type:"C",
+    x: Math.random()*500+100,
+    y: Math.random()*300+150,
+    angle: 0,
+    size: 45,
+    color:"#66aaff",
+    neon:"#0ff"
+  };
+}
 
-window.robot_api = {};
+/* fonctions publiques (identiques) */
+function addRobotB(){ robots.push(createRobotB()); }
+function addRobotC(){ robots.push(createRobotC()); }
+function resetSim(){ robots = []; }
 
-/* DESSIN DES ROBOTS */
+/* API basique (sera complétée plus bas) */
+window.robot_api = { };
+
+/* dessin robots (identique) */
 function drawRobotB(r){
   ctx.save();
-  ctx.translate(r.x,r.y); ctx.rotate(r.angle);
-  ctx.fillStyle=r.color; ctx.fillRect(-r.size/2,-r.size/2,r.size,r.size);
-  ctx.fillRect(-r.size/3,-r.size*0.9,r.size*0.66,r.size*0.5);
-  ctx.fillStyle=r.eyeColor;
-  ctx.beginPath(); ctx.arc(-10,-r.size*0.7,6,0,Math.PI*2); ctx.arc(10,-r.size*0.7,6,0,Math.PI*2); ctx.fill();
-  ctx.fillStyle=r.wheelsColor; ctx.fillRect(-r.size/2-6,-r.size/3,6,r.size*0.66); ctx.fillRect(r.size/2,-r.size/3,6,r.size*0.66);
+  ctx.translate(r.x, r.y);
+  ctx.rotate(r.angle);
+
+  ctx.fillStyle = r.color;
+  ctx.fillRect(-r.size/2, -r.size/2, r.size, r.size);
+
+  ctx.fillRect(-r.size/3, -r.size*0.9, r.size*0.66, r.size*0.5);
+
+  ctx.fillStyle = r.eyeColor;
+  ctx.beginPath();
+  ctx.arc(-10, -r.size*0.7, 6, 0, Math.PI*2);
+  ctx.arc(10, -r.size*0.7, 6, 0, Math.PI*2);
+  ctx.fill();
+
+  ctx.fillStyle = r.wheelsColor;
+  ctx.fillRect(-r.size/2-6, -r.size/3, 6, r.size*0.66);
+  ctx.fillRect(r.size/2, -r.size/3, 6, r.size*0.66);
+
   ctx.restore();
 }
-
 function drawRobotC(r){
   ctx.save();
-  ctx.translate(r.x,r.y); ctx.rotate(r.angle);
-  ctx.fillStyle=r.color;
-  ctx.beginPath(); ctx.moveTo(0,-r.size/1.2); ctx.lineTo(-r.size/1.3,r.size/1.2); ctx.lineTo(r.size/1.3,r.size/1.2); ctx.closePath(); ctx.fill();
-  ctx.fillStyle=r.neon; ctx.fillRect(-8,-r.size*0.2,16,6);
+  ctx.translate(r.x, r.y);
+  ctx.rotate(r.angle);
+
+  ctx.fillStyle = r.color;
+  ctx.beginPath();
+  ctx.moveTo(0, -r.size/1.2);
+  ctx.lineTo(-r.size/1.3, r.size/1.2);
+  ctx.lineTo(r.size/1.3, r.size/1.2);
+  ctx.closePath();
+  ctx.fill();
+
+  ctx.fillStyle = r.neon;
+  ctx.fillRect(-8, -r.size*0.2, 16, 6);
+
   ctx.restore();
 }
 
-/* NAVIGATION */
-canvas.addEventListener("contextmenu",e=>e.preventDefault());
-canvas.addEventListener("mousedown",e=>{ if(e.button===2) isRightDragging=true; if(e.button===0) isLeftDragging=true; lastMouseX=e.clientX; lastMouseY=e.clientY; });
-canvas.addEventListener("mouseup",e=>{ if(e.button===2) isRightDragging=false; if(e.button===0) isLeftDragging=false; });
-canvas.addEventListener("mousemove",e=>{ const dx=e.clientX-lastMouseX, dy=e.clientY-lastMouseY; if(isRightDragging){ camX+=dx/camZoom; camY+=dy/camZoom; } if(isLeftDragging) camRot+=dx*0.01; lastMouseX=e.clientX; lastMouseY=e.clientY; });
-canvas.addEventListener("wheel",e=>{ if(e.deltaY<0) camZoom*=1.1; else camZoom/=1.1; });
+/* navigation canvas (identique) */
+canvas.addEventListener("contextmenu", e => e.preventDefault());
+canvas.addEventListener("mousedown", e => {
+  if(e.button === 2){ isRightDragging = true; }
+  if(e.button === 0){ isLeftDragging = true; }
+  lastMouseX = e.clientX;
+  lastMouseY = e.clientY;
+});
+canvas.addEventListener("mouseup", e => {
+  if(e.button === 2) isRightDragging = false;
+  if(e.button === 0) isLeftDragging = false;
+});
+canvas.addEventListener("mousemove", e => {
+  const dx = e.clientX - lastMouseX;
+  const dy = e.clientY - lastMouseY;
 
+  if(isRightDragging){
+    camX += dx / camZoom;
+    camY += dy / camZoom;
+  }
+
+  if(isLeftDragging){
+    camRot += dx * 0.01;
+  }
+
+  lastMouseX = e.clientX;
+  lastMouseY = e.clientY;
+});
+canvas.addEventListener("wheel", e => {
+  const zoomFactor = 1.1;
+  if(e.deltaY < 0) camZoom *= zoomFactor;
+  else camZoom /= zoomFactor;
+});
+
+/* boucle rendu (identique) */
 function loop(){
   ctx.clearRect(0,0,canvas.width,canvas.height);
   ctx.save();
-  ctx.translate(canvas.width/2,canvas.height/2);
-  ctx.scale(camZoom,camZoom);
+
+  ctx.translate(canvas.width/2, canvas.height/2);
+  ctx.scale(camZoom, camZoom);
   ctx.rotate(camRot);
-  ctx.translate(-canvas.width/2+camX,-canvas.height/2+camY);
-  robots.forEach(r=>{ if(r.type==="B") drawRobotB(r); if(r.type==="C") drawRobotC(r); });
+  ctx.translate(-canvas.width/2 + camX, -canvas.height/2 + camY);
+
+  robots.forEach(r=>{
+    if(r.type==="B") drawRobotB(r);
+    if(r.type==="C") drawRobotC(r);
+  });
+
   ctx.restore();
   requestAnimationFrame(loop);
 }
 requestAnimationFrame(loop);
 
-/* -------------------------------
-   BLOCKLY — BLOCS + PLAY FONCTIONNEL
-------------------------------- */
+/* ------------------------------------------------------------------------
+   PARTIE 2 : AJOUT BLOCKLY + LIAISON (NE MODIFIE PAS LE SIMULATEUR CI-DESSUS)
+   ------------------------------------------------------------------------ */
+
+/* 1) Wrappers pour boutons HTML (on ne modifie pas les fonctions d'origine,
+      on les appelle puis on met à jour l'UI) */
+document.getElementById('btnAddB').addEventListener('click', ()=>{
+  addRobotB();
+  updateRobotDropdown();
+});
+document.getElementById('btnAddC').addEventListener('click', ()=>{
+  addRobotC();
+  updateRobotDropdown();
+});
+document.getElementById('btnReset').addEventListener('click', ()=>{
+  resetSim();
+  updateRobotDropdown();
+});
+
+/* 2) Fonctions de déplacement "sync" utilisées par les blocs
+      Ces fonctions animent le robot via petits pas (setInterval) :
+      l'appel retourne immédiatement, l'animation se fait ensuite. */
+robot_api.moveSync = function(id, dist){
+  const r = robots[id];
+  if(!r) return;
+  const steps = 20;
+  const dx = Math.cos(r.angle) * (dist/steps);
+  const dy = Math.sin(r.angle) * (dist/steps);
+  let i = 0;
+  const iv = setInterval(()=>{
+    if(!r){ clearInterval(iv); return; } // si robot supprimé
+    r.x += dx; r.y += dy;
+    i++;
+    if(i>=steps) clearInterval(iv);
+  }, 20);
+};
+
+robot_api.turnSync = function(id, deg){
+  const r = robots[id];
+  if(!r) return;
+  const steps = 15;
+  const da = (deg * Math.PI/180) / steps;
+  let i = 0;
+  const iv = setInterval(()=>{
+    if(!r){ clearInterval(iv); return; }
+    r.angle += da;
+    i++;
+    if(i>=steps) clearInterval(iv);
+  }, 20);
+};
+
+/* 3) Dropdown update + getSelectedRobot (toujours renvoie un index valide) */
+function updateRobotDropdown(){
+  const sel = document.getElementById("robotSelect");
+  sel.innerHTML = "";
+  robots.forEach((r,i)=>{
+    const opt = document.createElement('option');
+    opt.value = i;
+    opt.text = `${r.type} — id ${i}`;
+    sel.appendChild(opt);
+  });
+  // si des robots existent, sélectionne le premier par défaut
+  if(robots.length > 0 && sel.selectedIndex === -1){
+    sel.selectedIndex = 0;
+  }
+}
+function getSelectedRobot(){
+  const sel = document.getElementById("robotSelect");
+  if(!sel) return 0;
+  if(robots.length === 0) return 0;
+  if(sel.selectedIndex < 0) sel.selectedIndex = 0;
+  const v = parseInt(sel.value);
+  return isNaN(v) ? 0 : v;
+}
+
+/* 4) Définition des blocs AVANT injection afin qu'ils apparaissent dans la toolbox */
 Blockly.defineBlocksWithJsonArray([
-  { type:"move_forward", message0:"avancer de %1", args0:[{type:"field_number",name:"DIST",value:50}], previousStatement:null, nextStatement:null, colour:120 },
-  { type:"turn_left", message0:"tourner à gauche de %1°", args0:[{type:"field_number",name:"ANGLE",value:90}], previousStatement:null, nextStatement:null, colour:200 },
-  { type:"turn_right", message0:"tourner à droite de %1°", args0:[{type:"field_number",name:"ANGLE",value:90}], previousStatement:null, nextStatement:null, colour:200 }
+  {
+    "type": "move_forward",
+    "message0": "Avancer de %1 px",
+    "args0": [{"type":"field_number","name":"DIST","value":50}],
+    "previousStatement":null, "nextStatement":null, "colour":120
+  },
+  {
+    "type": "turn_left",
+    "message0": "Tourner à gauche de %1°",
+    "args0": [{"type":"field_number","name":"ANGLE","value":90}],
+    "previousStatement":null, "nextStatement":null, "colour":200
+  },
+  {
+    "type": "turn_right",
+    "message0": "Tourner à droite de %1°",
+    "args0": [{"type":"field_number","name":"ANGLE","value":90}],
+    "previousStatement":null, "nextStatement":null, "colour":200
+  }
 ]);
 
-Blockly.JavaScript['move_forward'] = block => `robot_api.moveSync(getSelectedRobot(), ${block.getFieldValue('DIST')});\n`;
-Blockly.JavaScript['turn_left'] = block => `robot_api.turnSync(getSelectedRobot(), -${block.getFieldValue('ANGLE')});\n`;
-Blockly.JavaScript['turn_right'] = block => `robot_api.turnSync(getSelectedRobot(), ${block.getFieldValue('ANGLE')});\n`;
+/* 5) Générateurs JS — ces blocs appellent les fonctions moveSync/turnSync */
+Blockly.JavaScript['move_forward'] = function(block){
+  const dist = block.getFieldValue('DIST') || 0;
+  return `robot_api.moveSync(${getSelectedRobot()}, ${dist});\n`;
+};
+Blockly.JavaScript['turn_left'] = function(block){
+  const a = block.getFieldValue('ANGLE') || 0;
+  return `robot_api.turnSync(${getSelectedRobot()}, ${-a});\n`;
+};
+Blockly.JavaScript['turn_right'] = function(block){
+  const a = block.getFieldValue('ANGLE') || 0;
+  return `robot_api.turnSync(${getSelectedRobot()}, ${a});\n`;
+};
 
-const toolbox=`<xml xmlns="https://developers.google.com/blockly/xml">
+/* 6) Toolbox + injection */
+const toolbox = `
+<xml xmlns="https://developers.google.com/blockly/xml">
   <category name="Déplacement" colour="#4CAF50">
     <block type="move_forward"></block>
     <block type="turn_left"></block>
     <block type="turn_right"></block>
   </category>
-</xml>`;
+</xml>
+`;
+const workspace = Blockly.inject('blocklyDiv', { toolbox: toolbox, trashcan: true });
 
-const workspace = Blockly.inject('blocklyDiv',{toolbox:toolbox, trashcan:true});
-
-/* FONCTIONS DE DEPLACEMENT DIRECT POUR BLOCS */
-robot_api.moveSync = function(id, dist){
-  const r=robots[id]; if(!r) return;
-  r.x += Math.cos(r.angle)*dist;
-  r.y += Math.sin(r.angle)*dist;
-};
-
-robot_api.turnSync = function(id, deg){
-  const r=robots[id]; if(!r) return;
-  r.angle += deg*Math.PI/180;
-};
-
-function getSelectedRobot(){
-  const sel=document.getElementById("robotSelect");
-  return parseInt(sel.value);
-}
-
+/* 7) Exécution du code Blockly (Play) — on eval directement le code généré */
+document.getElementById('runBtn').addEventListener('click', runBlockly);
 function runBlockly(){
-  if(robots.length===0){ alert("Ajoute un robot !"); return; }
+  if(robots.length === 0){
+    alert("Ajoute d'abord un robot (bouton Ajouter Robot B ou C).");
+    return;
+  }
+  // update dropdown pour être sûr
   updateRobotDropdown();
+
   const code = Blockly.JavaScript.workspaceToCode(workspace);
-  try{ eval(code); } catch(e){ console.error("Erreur Blockly:", e); }
+  try{
+    // exécution immédiate : les fonctions moveSync/turnSync animent via setInterval
+    eval(code);
+  }catch(e){
+    console.error("Erreur exécution Blockly:", e);
+    alert("Erreur lors de l'exécution du code Blockly — regarde la console.");
+  }
 }
 
-function updateRobotDropdown(){
-  const sel=document.getElementById("robotSelect");
-  sel.innerHTML="";
-  robots.forEach((r,i)=>{ sel.innerHTML+=`<option value="${i}">Robot ${i}</option>`; });
-}
+/* 8) Petit confort : auto-select & update si robots sont modifiés ailleurs */
+const observerInterval = setInterval(()=>{ updateRobotDropdown(); }, 800);
+/* clearInterval(observerInterval); // si tu veux arrêter la mise à jour automatique */
 </script>
 </body>
 </html>
