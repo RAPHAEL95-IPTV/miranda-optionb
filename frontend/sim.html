@@ -3,14 +3,16 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width,initial-scale=1" />
-<title>Simulateur 3D — Robots + Blockly (sans Cannon)</title>
+<title>Simulateur 3D — Robots + Blockly (corrigé)</title>
+
+<!-- Blockly CSS (important pour voir les blocs) -->
 <link rel="stylesheet" href="https://unpkg.com/blockly/media/blockly.css">
+
 <style>
   :root { --bg:#111; --panel:#222; --accent:#0af; --muted:#999; }
   body{margin:0;background:var(--bg);color:#fff;font-family:Arial,Helvetica,sans-serif}
   header{padding:10px;background:var(--panel);border-bottom:2px solid var(--accent);color:var(--accent)}
   .layout{display:flex;min-height:calc(100vh - 46px)}
-  /* left = simulator, right = blockly */
   #left{flex:1; padding:10px; box-sizing:border-box}
   #right{width:420px;padding:10px;box-sizing:border-box;border-left:1px solid rgba(255,255,255,0.03)}
   #sim_container{width:100%;height:640px;background:#222;display:flex;align-items:center;justify-content:center;border-radius:6px;overflow:hidden}
@@ -18,16 +20,15 @@
   .toolbar{margin:8px 0 12px 0;display:flex;gap:8px;align-items:center}
   .toolbar button{background:var(--accent);border:none;color:#000;padding:8px 12px;border-radius:6px;cursor:pointer}
   .toolbar button.ghost{background:transparent;color:#fff;border:1px solid rgba(255,255,255,0.06)}
-  #robotSelect{width:100%;padding:8px;border-radius:6px;background:#111;color:#fff;border:1px solid rgba(255,255,255,0.04)}
+  #robotSelect{width:160px;padding:8px;border-radius:6px;background:#111;color:#fff;border:1px solid rgba(255,255,255,0.04)}
   #runBtn{margin-left:6px;padding:10px 14px;border-radius:6px;background:#0f0;color:#000;border:none;cursor:pointer}
   #note{font-size:13px;color:var(--muted);margin-top:8px}
-  /* ensure blockly fits right column */
   #blocklyDiv{width:100%;height:560px;background:var(--panel);border-radius:6px}
   footer{padding:10px;color:var(--muted);font-size:13px;text-align:center}
 </style>
 </head>
 <body>
-<header><strong>Simulateur 3D — Robots</strong>  (version sans Cannon.js — Blockly intégré)</header>
+<header><strong>Simulateur 3D — Robots</strong>  (corrigé)</header>
 
 <div class="layout">
   <div id="left">
@@ -40,10 +41,10 @@
     </div>
 
     <div id="sim_container">
-      <!-- Canvas will be appended here -->
+      <!-- canvas injected here -->
     </div>
 
-    <div id="note">Conseil rapide : ajouter un robot, choisir "Robot 0", poser un bloc "Avancer 50" puis PLAY.</div>
+    <div id="note">Ajoute un robot, sélectionne-le, crée un bloc "Avancer" puis clique PLAY.</div>
   </div>
 
   <div id="right">
@@ -51,24 +52,22 @@
   </div>
 </div>
 
-<footer>Copier-coller ce fichier en remplacement — tout est local, pas de Cannon, pas de modifications externes.</footer>
+<footer>Version locale — sans Cannon (animation simple) — blocs visibles.</footer>
 
 <!-- libs -->
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r152/three.min.js"></script>
 <script src="https://unpkg.com/blockly/blockly.min.js"></script>
 
 <script>
-/* ============================
-   SIMULATEUR 3D (Three.js uniquement)
-   - no physics engine
-   - robots = array of { mesh }
-   - animations queue processed inside animate()
-   ============================ */
-
+/* ----------------------------
+   SIMULATEUR (Three.js seulement)
+   - robots: array of { mesh }
+   - animations queue processed in animate()
+   ---------------------------- */
 const container = document.getElementById('sim_container');
 let renderer, scene, camera, robots = [], animations = [];
 
-/* init three scene + renderer */
+/* start scene and renderer */
 function startSim(){
   const W = container.clientWidth || 800;
   const H = container.clientHeight || 640;
@@ -79,13 +78,14 @@ function startSim(){
   camera.position.set(6,6,6);
   camera.lookAt(0,0,0);
 
+  // remove old canvas if any (robustness)
+  const old = container.querySelector('canvas');
+  if(old) old.remove();
+
   renderer = new THREE.WebGLRenderer({antialias:true});
   renderer.setSize(W, H);
   renderer.setPixelRatio(window.devicePixelRatio || 1);
   renderer.setClearColor(0x222222);
-  // remove any previous canvas then append
-  const prev = container.querySelector('canvas');
-  if(prev) prev.remove();
   container.appendChild(renderer.domElement);
 
   // lights
@@ -93,28 +93,25 @@ function startSim(){
   dir.position.set(5,10,5); scene.add(dir);
   scene.add(new THREE.AmbientLight(0xcccccc, 0.6));
 
-  // floor (visible)
+  // floor + grid
   const floor = new THREE.Mesh(
     new THREE.PlaneGeometry(40,40),
     new THREE.MeshStandardMaterial({color:0x5a5a5a})
   );
-  floor.rotation.x = -Math.PI/2;
-  scene.add(floor);
-
-  // grid helper to help orientation
+  floor.rotation.x = -Math.PI/2; scene.add(floor);
   const grid = new THREE.GridHelper(40,40,0x444444,0x333333);
   scene.add(grid);
 
-  // ensure responsiveness
   window.addEventListener('resize', onResize);
 
-  // add a default robot so user sees something immediately
-  addRobotB();
+  // ensure there's at least one robot visible
+  if(robots.length === 0){
+    addRobotB();
+  }
   updateRobotDropdown();
 
   animate();
 }
-
 function onResize(){
   if(!renderer || !camera) return;
   const W = container.clientWidth || 800;
@@ -124,7 +121,7 @@ function onResize(){
   camera.updateProjectionMatrix();
 }
 
-/* Robot factories (mesh only) */
+/* robot creation (mesh only) */
 function addRobotB(){
   const geo = new THREE.BoxGeometry(1,1,1);
   const mat = new THREE.MeshStandardMaterial({color:0xffdd66});
@@ -133,9 +130,9 @@ function addRobotB(){
   mesh.rotation.order = 'YXZ';
   scene.add(mesh);
   robots.push({mesh});
+  console.log('Added Robot B, total robots=', robots.length);
   updateRobotDropdown();
 }
-
 function addRobotC(){
   const geo = new THREE.ConeGeometry(0.5,1,4);
   const mat = new THREE.MeshStandardMaterial({color:0x66aaff});
@@ -144,26 +141,21 @@ function addRobotC(){
   mesh.rotation.order = 'YXZ';
   scene.add(mesh);
   robots.push({mesh});
+  console.log('Added Robot C, total robots=', robots.length);
   updateRobotDropdown();
 }
-
 function resetSim(){
-  robots.forEach(r => {
-    if(r.mesh) scene.remove(r.mesh);
-  });
+  robots.forEach(r => { if(r.mesh) scene.remove(r.mesh); });
   robots = [];
   animations = [];
+  console.log('Reset simulation');
   updateRobotDropdown();
 }
 
-/* animation queue helpers
-   pushMove(id, distance, durationMs)
-   pushTurn(id, degrees, durationMs)
-   animations are objects processed each frame
-*/
+/* animation queue helpers (no physics) */
 function pushMove(id, dist, durationMs = 400){
   const r = robots[id];
-  if(!r) return;
+  if(!r) { console.warn('pushMove: invalid id', id); return; }
   const steps = Math.max(1, Math.round((durationMs/1000) * 60));
   const angle = r.mesh.rotation.y;
   const dx = Math.sin(angle) * (dist / steps) * 0.01;
@@ -172,17 +164,16 @@ function pushMove(id, dist, durationMs = 400){
 }
 function pushTurn(id, deg, durationMs = 300){
   const r = robots[id];
-  if(!r) return;
+  if(!r) { console.warn('pushTurn: invalid id', id); return; }
   const steps = Math.max(1, Math.round((durationMs/1000) * 60));
   const da = (deg * Math.PI/180) / steps;
   animations.push({type:'turn', id, stepsLeft:steps, da});
 }
 
-/* animate loop applies animations and renders */
+/* animate loop */
 function animate(){
   requestAnimationFrame(animate);
 
-  // apply animations (iterate backwards to allow removal)
   for(let i = animations.length - 1; i >= 0; i--){
     const a = animations[i];
     const r = robots[a.id];
@@ -201,12 +192,12 @@ function animate(){
   renderer.render(scene, camera);
 }
 
-/* dropdown utility */
+/* dropdown helpers */
 function updateRobotDropdown(){
   const sel = document.getElementById('robotSelect');
   if(!sel) return;
   sel.innerHTML = '';
-  robots.forEach((r,i) => {
+  robots.forEach((r,i)=>{
     const opt = document.createElement('option');
     opt.value = i;
     opt.text = `Robot ${i}`;
@@ -223,18 +214,17 @@ function getSelectedRobot(){
   return isNaN(v) ? 0 : v;
 }
 
-/* expose control helpers for Blockly/runtime */
+/* expose small API for blocks */
 window.pushMove = pushMove;
 window.pushTurn = pushTurn;
 window.getSelectedRobot = getSelectedRobot;
 
-/* start scene */
+/* start */
 startSim();
 
 /* ============================
    BLOCKLY SETUP
-   - blocks call window.pushMove/getSelectedRobot to enqueue animations
-   - code generated is executed via eval (safe-ish for local editing)
+   - define blocks first, then inject (so toolbox shows them)
    ============================ */
 
 const toolboxXml = `
@@ -275,6 +265,7 @@ Blockly.defineBlocksWithJsonArray([
 
 Blockly.JavaScript['move_forward'] = function(block){
   const dist = Number(block.getFieldValue('DIST')) || 0;
+  // call pushMove at execution time using selected robot id
   return `window.pushMove(window.getSelectedRobot(), ${dist});\n`;
 };
 Blockly.JavaScript['turn_right'] = function(block){
@@ -295,20 +286,19 @@ const workspace = Blockly.inject('blocklyDiv',{
 /* run button executes code generated by workspace */
 document.getElementById('runBtn').addEventListener('click', () => {
   if(robots.length === 0){ alert('Ajoute d\'abord un robot.'); return; }
-  updateRobotDropdown(); // ensure dropdown matches current robots
+  updateRobotDropdown(); // sync
   const code = Blockly.JavaScript.workspaceToCode(workspace);
   try {
-    // run generated code
     const AsyncFn = Object.getPrototypeOf(async function(){}).constructor;
     const fn = new AsyncFn(code);
     fn();
   } catch (e){
     console.error('Erreur exécution Blockly:', e);
-    alert('Erreur lors de l\'exécution du programme. Regarde la console.');
+    alert('Erreur — regarde la console.');
   }
 });
 
-/* UI buttons */
+/* UI buttons wiring (safety: use addEventListener to avoid inline issues) */
 document.getElementById('btnAddB').addEventListener('click', ()=>{ addRobotB(); updateRobotDropdown(); });
 document.getElementById('btnAddC').addEventListener('click', ()=>{ addRobotC(); updateRobotDropdown(); });
 document.getElementById('btnReset').addEventListener('click', ()=>{ resetSim(); updateRobotDropdown(); });
