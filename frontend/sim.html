@@ -2,6 +2,7 @@
 <html>
 <head>
 <meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Simulateur 2D Robots + Blockly</title>
 <style>
 body{margin:0;font-family:Arial;background:#111;color:#fff}
@@ -29,8 +30,9 @@ h2{padding:10px;background:#222;color:#0af;margin:0;border-bottom:2px solid #0af
 <div id="blocklyDiv"></div>
 <button id="runBtn">▶ Exécuter</button>
 
-<!-- Blockly intégré en interne -->
+<!-- Blockly intégré via CDN simplifié pour test -->
 <script src="https://unpkg.com/blockly/blockly.min.js"></script>
+
 <script>
 // ===========================
 // SIMULATEUR 2D
@@ -39,71 +41,109 @@ const canvas=document.getElementById("sim");
 const ctx=canvas.getContext("2d");
 let robots=[];
 
-function createRobot(color){return {x:100+Math.random()*500,y:100+Math.random()*200,angle:0,size:40,color:color};}
-function addRobotB(){robots.push(createRobot("#ffdd66")); updateRobotSelect();}
-function addRobotC(){robots.push(createRobot("#66aaff")); updateRobotSelect();}
-function updateRobotSelect(){const sel=document.getElementById("robotSelect"); sel.innerHTML=""; robots.forEach((r,i)=>{let opt=document.createElement("option"); opt.value=i; opt.textContent="Robot "+i; sel.appendChild(opt);});}
-function resetSim(){robots=[]; updateRobotSelect();}
+function createRobot(color){
+  return {x:100+Math.random()*500, y:100+Math.random()*200, angle:0, size:40, color:color};
+}
+function addRobotB(){ robots.push(createRobot("#ffdd66")); updateRobotSelect(); }
+function addRobotC(){ robots.push(createRobot("#66aaff")); updateRobotSelect(); }
+function resetSim(){ robots=[]; updateRobotSelect(); }
+function updateRobotSelect(){
+  const sel=document.getElementById("robotSelect");
+  sel.innerHTML="";
+  robots.forEach((r,i)=>{
+    let opt=document.createElement("option");
+    opt.value=i;
+    opt.textContent="Robot "+i;
+    sel.appendChild(opt);
+  });
+}
 
 // API mouvements
-window.robot_api={
-  move(id,dist){const r=robots[id]; if(!r) return; r.x+=Math.cos(r.angle)*dist; r.y+=Math.sin(r.angle)*dist;},
-  turn(id,deg){const r=robots[id]; if(!r) return; r.angle+=deg*Math.PI/180;}
+window.robot_api = {
+  move(id, dist){
+    const r = robots[id]; 
+    if(!r) return; 
+    r.x += Math.cos(r.angle)*dist; 
+    r.y += Math.sin(r.angle)*dist;
+  },
+  turn(id, deg){
+    const r = robots[id]; 
+    if(!r) return; 
+    r.angle += deg*Math.PI/180;
+  }
 };
 
 // Dessin robots
-function drawRobot(r){ctx.save(); ctx.translate(r.x,r.y); ctx.rotate(r.angle); ctx.fillStyle=r.color; ctx.fillRect(-r.size/2,-r.size/2,r.size,r.size); ctx.restore();}
-function loop(){ctx.clearRect(0,0,canvas.width,canvas.height); robots.forEach(drawRobot); requestAnimationFrame(loop);}
+function drawRobot(r){
+  ctx.save();
+  ctx.translate(r.x,r.y);
+  ctx.rotate(r.angle);
+  ctx.fillStyle = r.color;
+  ctx.fillRect(-r.size/2,-r.size/2,r.size,r.size);
+  ctx.restore();
+}
+
+function loop(){
+  ctx.clearRect(0,0,canvas.width,canvas.height);
+  robots.forEach(drawRobot);
+  requestAnimationFrame(loop);
+}
 loop();
 
 // ===========================
 // BLOCKLY
 // ===========================
-var workspace=Blockly.inject('blocklyDiv',{
+var workspace = Blockly.inject('blocklyDiv', {
   toolbox: {
     kind:"flyoutToolbox",
     contents:[
-      {kind:"block",type:"move_forward"},
-      {kind:"block",type:"turn_right"},
-      {kind:"block",type:"controls_repeat_ext"}
+      {kind:"block", type:"move_forward"},
+      {kind:"block", type:"turn_right"},
+      {kind:"block", type:"controls_repeat_ext"}
     ]
   }
 });
 
 // Bloc avancer
-Blockly.Blocks['move_forward']={init:function(){
-  this.appendDummyInput().appendField("avancer de")
-      .appendField(new Blockly.FieldNumber(50,1,500),"DIST").appendField("px");
-  this.setPreviousStatement(true);
-  this.setNextStatement(true);
-  this.setColour(120);
-}};
-Blockly.JavaScript['move_forward']=function(block){
-  const dist=block.getFieldValue('DIST');
-  const id=document.getElementById("robotSelect").value;
-  return `robot_api.move(${id},${dist});\n`;
+Blockly.Blocks['move_forward'] = {
+  init: function() {
+    this.appendDummyInput()
+      .appendField("avancer de")
+      .appendField(new Blockly.FieldNumber(50,1,500),"DIST")
+      .appendField("px");
+    this.setPreviousStatement(true);
+    this.setNextStatement(true);
+    this.setColour(120);
+  }
+};
+Blockly.JavaScript['move_forward'] = function(block){
+  const dist = block.getFieldValue('DIST');
+  return `robot_api.move(parseInt(document.getElementById("robotSelect").value), ${dist});\n`;
 };
 
 // Bloc tourner
-Blockly.Blocks['turn_right']={init:function(){
-  this.appendDummyInput().appendField("tourner de")
-      .appendField(new Blockly.FieldAngle(90),"ANGLE").appendField("°");
-  this.setPreviousStatement(true);
-  this.setNextStatement(true);
-  this.setColour(230);
-}};
-Blockly.JavaScript['turn_right']=function(block){
-  const deg=block.getFieldValue('ANGLE');
-  const id=document.getElementById("robotSelect").value;
-  return `robot_api.turn(${id},${deg});\n`;
+Blockly.Blocks['turn_right'] = {
+  init: function() {
+    this.appendDummyInput()
+      .appendField("tourner de")
+      .appendField(new Blockly.FieldAngle(90),"ANGLE")
+      .appendField("°");
+    this.setPreviousStatement(true);
+    this.setNextStatement(true);
+    this.setColour(230);
+  }
+};
+Blockly.JavaScript['turn_right'] = function(block){
+  const deg = block.getFieldValue('ANGLE');
+  return `robot_api.turn(parseInt(document.getElementById("robotSelect").value), ${deg});\n`;
 };
 
 // Bouton exécuter
-document.getElementById("runBtn").onclick=()=>{
+document.getElementById("runBtn").onclick = () => {
   try{
-    const code=Blockly.JavaScript.workspaceToCode(workspace);
-    const AsyncFn=Object.getPrototypeOf(async function(){}).constructor;
-    const fn=new AsyncFn("robot_api",code);
+    const code = Blockly.JavaScript.workspaceToCode(workspace);
+    const AsyncFn = Object.getPrototypeOf(async function(){}).constructor;
+    const fn = new AsyncFn("robot_api", code);
     fn(robot_api);
   }catch(e){console.error(e);}
 };
