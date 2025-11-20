@@ -1,177 +1,319 @@
 <!doctype html>
 <html>
 <head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Simulateur 3D + Blockly</title>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>Simulateur 3D — Robots + Blockly (sans Cannon)</title>
+<link rel="stylesheet" href="https://unpkg.com/blockly/media/blockly.css">
 <style>
-  body{margin:0;background:#111;color:#fff;font-family:Arial}
-  h2{margin:0;padding:10px;background:#222;color:#0af;border-bottom:2px solid #0af}
-  #toolbar{padding:10px;background:#000;border-bottom:1px solid #333}
-  #toolbar button{padding:8px 14px;margin-right:6px;background:#0af;border:none;color:#fff;border-radius:4px;cursor:pointer}
-  #toolbar button:hover{background:#08c}
-  #sim_container{width:100%;height:400px;position:relative;background:#222}
-  #blocklyDiv{height:300px;width:100%;border:1px solid #444;margin-top:10px;}
-  #runBlocks{padding:8px 16px;margin-top:6px;background:#0af;color:#fff;border:none;border-radius:4px;cursor:pointer;}
+  :root { --bg:#111; --panel:#222; --accent:#0af; --muted:#999; }
+  body{margin:0;background:var(--bg);color:#fff;font-family:Arial,Helvetica,sans-serif}
+  header{padding:10px;background:var(--panel);border-bottom:2px solid var(--accent);color:var(--accent)}
+  .layout{display:flex;min-height:calc(100vh - 46px)}
+  /* left = simulator, right = blockly */
+  #left{flex:1; padding:10px; box-sizing:border-box}
+  #right{width:420px;padding:10px;box-sizing:border-box;border-left:1px solid rgba(255,255,255,0.03)}
+  #sim_container{width:100%;height:640px;background:#222;display:flex;align-items:center;justify-content:center;border-radius:6px;overflow:hidden}
+  canvas{display:block}
+  .toolbar{margin:8px 0 12px 0;display:flex;gap:8px;align-items:center}
+  .toolbar button{background:var(--accent);border:none;color:#000;padding:8px 12px;border-radius:6px;cursor:pointer}
+  .toolbar button.ghost{background:transparent;color:#fff;border:1px solid rgba(255,255,255,0.06)}
+  #robotSelect{width:100%;padding:8px;border-radius:6px;background:#111;color:#fff;border:1px solid rgba(255,255,255,0.04)}
+  #runBtn{margin-left:6px;padding:10px 14px;border-radius:6px;background:#0f0;color:#000;border:none;cursor:pointer}
+  #note{font-size:13px;color:var(--muted);margin-top:8px}
+  /* ensure blockly fits right column */
+  #blocklyDiv{width:100%;height:560px;background:var(--panel);border-radius:6px}
+  footer{padding:10px;color:var(--muted);font-size:13px;text-align:center}
 </style>
 </head>
 <body>
-<h2>Simulateur 3D Robots + Blockly</h2>
+<header><strong>Simulateur 3D — Robots</strong>  (version sans Cannon.js — Blockly intégré)</header>
 
-<div id="toolbar">
-  <button onclick="addRobotB()">➕ Ajouter Robot B</button>
-  <button onclick="addRobotC()">➕ Ajouter Robot C</button>
-  <button onclick="resetSim()">♻ Réinitialiser</button>
+<div class="layout">
+  <div id="left">
+    <div class="toolbar">
+      <button id="btnAddB">➕ Ajouter Robot B (Wall-E)</button>
+      <button id="btnAddC">➕ Ajouter Robot C (Futuriste)</button>
+      <button id="btnReset" class="ghost">♻ Réinitialiser</button>
+      <select id="robotSelect" title="Robot contrôlé"></select>
+      <button id="runBtn">▶ PLAY</button>
+    </div>
+
+    <div id="sim_container">
+      <!-- Canvas will be appended here -->
+    </div>
+
+    <div id="note">Conseil rapide : ajouter un robot, choisir "Robot 0", poser un bloc "Avancer 50" puis PLAY.</div>
+  </div>
+
+  <div id="right">
+    <div id="blocklyDiv"></div>
+  </div>
 </div>
 
-<div id="sim_container"></div>
-<div id="blocklyDiv"></div>
-<button id="runBlocks">▶ Play</button>
+<footer>Copier-coller ce fichier en remplacement — tout est local, pas de Cannon, pas de modifications externes.</footer>
 
+<!-- libs -->
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r152/three.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/cannon-es@0.20.0/dist/cannon-es.js"></script>
 <script src="https://unpkg.com/blockly/blockly.min.js"></script>
 
 <script>
-// --- 3D SIMULATOR ---
-let scene, camera, renderer, world, robots=[];
-const container = document.getElementById('sim_container');
+/* ============================
+   SIMULATEUR 3D (Three.js uniquement)
+   - no physics engine
+   - robots = array of { mesh }
+   - animations queue processed inside animate()
+   ============================ */
 
+const container = document.getElementById('sim_container');
+let renderer, scene, camera, robots = [], animations = [];
+
+/* init three scene + renderer */
 function startSim(){
-  const W = container.clientWidth||800, H=container.clientHeight||400;
+  const W = container.clientWidth || 800;
+  const H = container.clientHeight || 640;
+
   scene = new THREE.Scene();
-  camera = new THREE.PerspectiveCamera(60,W/H,0.1,1000);
+
+  camera = new THREE.PerspectiveCamera(60, W/H, 0.1, 1000);
   camera.position.set(6,6,6);
   camera.lookAt(0,0,0);
 
   renderer = new THREE.WebGLRenderer({antialias:true});
-  renderer.setSize(W,H);
+  renderer.setSize(W, H);
+  renderer.setPixelRatio(window.devicePixelRatio || 1);
   renderer.setClearColor(0x222222);
+  // remove any previous canvas then append
+  const prev = container.querySelector('canvas');
+  if(prev) prev.remove();
   container.appendChild(renderer.domElement);
 
-  const light = new THREE.DirectionalLight(0xffffff,1.5);
-  light.position.set(5,10,5);
-  scene.add(light);
-  scene.add(new THREE.AmbientLight(0x999999,0.8));
+  // lights
+  const dir = new THREE.DirectionalLight(0xffffff, 1.4);
+  dir.position.set(5,10,5); scene.add(dir);
+  scene.add(new THREE.AmbientLight(0xcccccc, 0.6));
 
-  const floorGeo = new THREE.PlaneGeometry(40,40);
-  const floorMat = new THREE.MeshStandardMaterial({color:0x555555});
-  const floorMesh = new THREE.Mesh(floorGeo,floorMat);
-  floorMesh.rotation.x = -Math.PI/2;
-  scene.add(floorMesh);
+  // floor (visible)
+  const floor = new THREE.Mesh(
+    new THREE.PlaneGeometry(40,40),
+    new THREE.MeshStandardMaterial({color:0x5a5a5a})
+  );
+  floor.rotation.x = -Math.PI/2;
+  scene.add(floor);
 
-  world = new CANNON.World({gravity:new CANNON.Vec3(0,-9.82,0)});
-  const groundBody = new CANNON.Body({mass:0});
-  groundBody.addShape(new CANNON.Plane());
-  groundBody.quaternion.setFromEuler(-Math.PI/2,0,0);
-  world.addBody(groundBody);
+  // grid helper to help orientation
+  const grid = new THREE.GridHelper(40,40,0x444444,0x333333);
+  scene.add(grid);
+
+  // ensure responsiveness
+  window.addEventListener('resize', onResize);
+
+  // add a default robot so user sees something immediately
+  addRobotB();
+  updateRobotDropdown();
 
   animate();
 }
 
+function onResize(){
+  if(!renderer || !camera) return;
+  const W = container.clientWidth || 800;
+  const H = container.clientHeight || 640;
+  renderer.setSize(W,H);
+  camera.aspect = W/H;
+  camera.updateProjectionMatrix();
+}
+
+/* Robot factories (mesh only) */
 function addRobotB(){
   const geo = new THREE.BoxGeometry(1,1,1);
   const mat = new THREE.MeshStandardMaterial({color:0xffdd66});
-  const mesh = new THREE.Mesh(geo,mat);
+  const mesh = new THREE.Mesh(geo, mat);
   mesh.position.set(0,0.5,0);
+  mesh.rotation.order = 'YXZ';
   scene.add(mesh);
-
-  const body = new CANNON.Body({mass:1});
-  body.addShape(new CANNON.Box(new CANNON.Vec3(0.5,0.5,0.5)));
-  body.position.set(mesh.position.x,mesh.position.y,mesh.position.z);
-  world.addBody(body);
-
-  robots.push({mesh,body});
+  robots.push({mesh});
+  updateRobotDropdown();
 }
 
 function addRobotC(){
   const geo = new THREE.ConeGeometry(0.5,1,4);
   const mat = new THREE.MeshStandardMaterial({color:0x66aaff});
-  const mesh = new THREE.Mesh(geo,mat);
+  const mesh = new THREE.Mesh(geo, mat);
   mesh.position.set(2,0.5,0);
+  mesh.rotation.order = 'YXZ';
   scene.add(mesh);
-
-  const body = new CANNON.Body({mass:1});
-  body.addShape(new CANNON.Cylinder(0.5,0.5,1,4));
-  body.position.set(mesh.position.x,mesh.position.y,mesh.position.z);
-  world.addBody(body);
-
-  robots.push({mesh,body});
+  robots.push({mesh});
+  updateRobotDropdown();
 }
 
 function resetSim(){
-  robots.forEach(r=>{
+  robots.forEach(r => {
     if(r.mesh) scene.remove(r.mesh);
-    if(r.body) world.removeBody(r.body);
   });
-  robots=[];
+  robots = [];
+  animations = [];
+  updateRobotDropdown();
 }
 
+/* animation queue helpers
+   pushMove(id, distance, durationMs)
+   pushTurn(id, degrees, durationMs)
+   animations are objects processed each frame
+*/
+function pushMove(id, dist, durationMs = 400){
+  const r = robots[id];
+  if(!r) return;
+  const steps = Math.max(1, Math.round((durationMs/1000) * 60));
+  const angle = r.mesh.rotation.y;
+  const dx = Math.sin(angle) * (dist / steps) * 0.01;
+  const dz = Math.cos(angle) * (dist / steps) * 0.01;
+  animations.push({type:'move', id, stepsLeft:steps, dx, dz});
+}
+function pushTurn(id, deg, durationMs = 300){
+  const r = robots[id];
+  if(!r) return;
+  const steps = Math.max(1, Math.round((durationMs/1000) * 60));
+  const da = (deg * Math.PI/180) / steps;
+  animations.push({type:'turn', id, stepsLeft:steps, da});
+}
+
+/* animate loop applies animations and renders */
 function animate(){
   requestAnimationFrame(animate);
-  if(world) world.step(1/60);
-  robots.forEach(r=>{
-    if(r.mesh && r.body){
-      r.mesh.position.copy(r.body.position);
-      r.mesh.quaternion.copy(r.body.quaternion);
+
+  // apply animations (iterate backwards to allow removal)
+  for(let i = animations.length - 1; i >= 0; i--){
+    const a = animations[i];
+    const r = robots[a.id];
+    if(!r || !r.mesh){ animations.splice(i,1); continue; }
+    if(a.type === 'move'){
+      r.mesh.position.x += a.dx;
+      r.mesh.position.z += a.dz;
+      a.stepsLeft--;
+    } else if(a.type === 'turn'){
+      r.mesh.rotation.y += a.da;
+      a.stepsLeft--;
     }
-  });
-  renderer.render(scene,camera);
+    if(a.stepsLeft <= 0) animations.splice(i,1);
+  }
+
+  renderer.render(scene, camera);
 }
 
+/* dropdown utility */
+function updateRobotDropdown(){
+  const sel = document.getElementById('robotSelect');
+  if(!sel) return;
+  sel.innerHTML = '';
+  robots.forEach((r,i) => {
+    const opt = document.createElement('option');
+    opt.value = i;
+    opt.text = `Robot ${i}`;
+    sel.appendChild(opt);
+  });
+  if(robots.length > 0 && sel.selectedIndex === -1) sel.selectedIndex = 0;
+}
+function getSelectedRobot(){
+  const sel = document.getElementById('robotSelect');
+  if(!sel) return 0;
+  if(robots.length === 0) return 0;
+  if(sel.selectedIndex < 0) sel.selectedIndex = 0;
+  const v = parseInt(sel.value);
+  return isNaN(v) ? 0 : v;
+}
+
+/* expose control helpers for Blockly/runtime */
+window.pushMove = pushMove;
+window.pushTurn = pushTurn;
+window.getSelectedRobot = getSelectedRobot;
+
+/* start scene */
 startSim();
 
-// --- BLOCKLY ---
-const workspace = Blockly.inject('blocklyDiv',{
-  toolbox: `<xml xmlns="https://developers.google.com/blockly/xml">
+/* ============================
+   BLOCKLY SETUP
+   - blocks call window.pushMove/getSelectedRobot to enqueue animations
+   - code generated is executed via eval (safe-ish for local editing)
+   ============================ */
+
+const toolboxXml = `
+<xml xmlns="https://developers.google.com/blockly/xml">
+  <category name="Mouvement" colour="#4CAF50">
     <block type="move_forward"></block>
-    <block type="turn"></block>
-  </xml>`
+    <block type="turn_right"></block>
+    <block type="turn_left"></block>
+  </category>
+  <category name="Contrôle" colour="#4A148C">
+    <block type="controls_repeat_ext">
+      <value name="TIMES"><shadow type="math_number"><field name="NUM">2</field></shadow></value>
+    </block>
+  </category>
+</xml>
+`;
+
+Blockly.defineBlocksWithJsonArray([
+  {
+    "type":"move_forward",
+    "message0":"Avancer %1 px",
+    "args0":[{"type":"field_number","name":"DIST","value":50}],
+    "previousStatement":null,"nextStatement":null,"colour":120
+  },
+  {
+    "type":"turn_right",
+    "message0":"Tourner à droite %1°",
+    "args0":[{"type":"field_angle","name":"ANGLE","angle":"90"}],
+    "previousStatement":null,"nextStatement":null,"colour":200
+  },
+  {
+    "type":"turn_left",
+    "message0":"Tourner à gauche %1°",
+    "args0":[{"type":"field_angle","name":"ANGLE","angle":"90"}],
+    "previousStatement":null,"nextStatement":null,"colour":200
+  }
+]);
+
+Blockly.JavaScript['move_forward'] = function(block){
+  const dist = Number(block.getFieldValue('DIST')) || 0;
+  return `window.pushMove(window.getSelectedRobot(), ${dist});\n`;
+};
+Blockly.JavaScript['turn_right'] = function(block){
+  const a = Number(block.getFieldValue('ANGLE')) || 0;
+  return `window.pushTurn(window.getSelectedRobot(), ${a});\n`;
+};
+Blockly.JavaScript['turn_left'] = function(block){
+  const a = Number(block.getFieldValue('ANGLE')) || 0;
+  return `window.pushTurn(window.getSelectedRobot(), ${-a});\n`;
+};
+
+const workspace = Blockly.inject('blocklyDiv',{
+  toolbox: toolboxXml,
+  trashcan: true,
+  scrollbars: true
 });
 
-Blockly.Blocks['move_forward'] = {
-  init: function() {
-    this.appendDummyInput().appendField("Avancer de").appendField(new Blockly.FieldNumber(50,1,500),"DIST").appendField("cm");
-    this.setPreviousStatement(true,null);
-    this.setNextStatement(true,null);
-    this.setColour(120);
-  }
-};
-Blockly.JavaScript['move_forward'] = function(block){
-  const dist = Number(block.getFieldValue('DIST'));
-  return `
-    if(robots[0] && robots[0].body){
-      robots[0].body.position.x += ${dist}*0.01;
-      robots[0].body.position.z += ${dist}*0.01;
-    }
-  `;
-};
-
-Blockly.Blocks['turn'] = {
-  init: function() {
-    this.appendDummyInput().appendField("Tourner de").appendField(new Blockly.FieldAngle(90),"ANGLE").appendField("°");
-    this.setPreviousStatement(true,null);
-    this.setNextStatement(true,null);
-    this.setColour(230);
-  }
-};
-Blockly.JavaScript['turn'] = function(block){
-  const deg = Number(block.getFieldValue('ANGLE'));
-  return `
-    if(robots[0] && robots[0].body){
-      robots[0].body.quaternion.setFromEuler(0, ${deg}*Math.PI/180, 0);
-    }
-  `;
-};
-
-document.getElementById('runBlocks').addEventListener('click',()=>{
+/* run button executes code generated by workspace */
+document.getElementById('runBtn').addEventListener('click', () => {
+  if(robots.length === 0){ alert('Ajoute d\'abord un robot.'); return; }
+  updateRobotDropdown(); // ensure dropdown matches current robots
   const code = Blockly.JavaScript.workspaceToCode(workspace);
-  try{
+  try {
+    // run generated code
     const AsyncFn = Object.getPrototypeOf(async function(){}).constructor;
     const fn = new AsyncFn(code);
     fn();
-  }catch(e){console.error(e);}
+  } catch (e){
+    console.error('Erreur exécution Blockly:', e);
+    alert('Erreur lors de l\'exécution du programme. Regarde la console.');
+  }
 });
+
+/* UI buttons */
+document.getElementById('btnAddB').addEventListener('click', ()=>{ addRobotB(); updateRobotDropdown(); });
+document.getElementById('btnAddC').addEventListener('click', ()=>{ addRobotC(); updateRobotDropdown(); });
+document.getElementById('btnReset').addEventListener('click', ()=>{ resetSim(); updateRobotDropdown(); });
+
 </script>
 </body>
 </html>
+```0
